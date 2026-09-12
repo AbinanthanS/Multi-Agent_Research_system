@@ -1,0 +1,31 @@
+# Core LLM + LangChain ecosystem
+# NOTE: create_agent (used in src/agents/agents.py) requires langchain>=1.0
+langchain>=1.0.0,<2.0.0
+langchain-core>=1.0.0,<2.0.0
+langchain-openai>=0.3.0,<0.4.0
+streamlit>=1.38.0,<2.0.0
+
+# HTTP API
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0,<1.0.0
+
+# Tavily Search Tool
+tavily-python>=0.5.0,<0.6.0
+
+# Web scraping
+beautifulsoup4>=4.12.0,<5.0.0
+readability-lxml>=0.8.1
+trafilatura>=1.9.0,<2.0.0
+requests>=2.31.0,<3.0.0
+lxml>=5.0.0,<6.0.0
+
+# Config, validation, resilience
+pydantic>=2.7.0,<3.0.0
+pydantic-settings>=2.4.0,<3.0.0
+tenacity>=8.2.0,<9.0.0
+
+# Environment variables
+python-dotenv>=1.0.0,<2.0.0
+
+# Logging / debugging
+rich>=13.7.0,<14.0.0
