@@ -1,0 +1,21 @@
+# Secrets and environment files
+.env
+.env.*
+!.env.example
+
+# Node.js
+node_modules/
+backend/coverage/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
