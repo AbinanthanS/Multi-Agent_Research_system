@@ -4,11 +4,16 @@ import { env } from "./env.js";
 
 const { Pool } = pg;
 
+const connectionString =
+  env.NODE_ENV === "test"
+    ? env.TEST_DATABASE_URL
+    : env.DATABASE_URL;
+
 export const pool = new Pool({
-  connectionString: env.DATABASE_URL,
-  max: 10,
+  connectionString,
+  max: env.NODE_ENV === "test" ? 3 : 10,
   idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 5_000,
+  connectionTimeoutMillis: env.NODE_ENV === "test" ? 20_000 : 10_000,
   application_name: "sciresearch-backend",
 });
 

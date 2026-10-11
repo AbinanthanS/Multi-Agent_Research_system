@@ -1,5 +1,6 @@
 import app from "./app.js";
 import { env } from "./config/env.js";
+import { pool } from "./config/database.js";
 
 const server = app.listen(env.PORT, () => {
   console.log(
@@ -7,17 +8,36 @@ const server = app.listen(env.PORT, () => {
   );
 });
 
+let isShuttingDown = false;
+
 function shutdown(signal) {
+  if (isShuttingDown) {
+    return;
+  }
+
+  isShuttingDown = true;
+
   console.log(`${signal} received. Shutting down gracefully.`);
 
-  server.close((error) => {
-    if (error) {
-      console.error("Error during shutdown:", error);
-      process.exitCode = 1;
-      return;
+  server.close(async (serverError) => {
+    let exitCode = serverError ? 1 : 0;
+
+    if (serverError) {
+      console.error("Error closing HTTP server:", serverError);
     }
 
-    process.exitCode = 0;
+    try {
+      await pool.end();
+      console.log("PostgreSQL connection pool closed.");
+    } catch (databaseError) {
+      console.error(
+        "Error closing PostgreSQL connection pool:",
+        databaseError,
+      );
+      exitCode = 1;
+    }
+
+    process.exitCode = exitCode;
   });
 }
 

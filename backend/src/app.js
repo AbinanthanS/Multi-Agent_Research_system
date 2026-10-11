@@ -3,6 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 
+import researchRunsRouter from "./routes/research-runs.routes.js";
+
 import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { notFoundHandler } from "./middleware/not-found.js";
@@ -47,7 +49,8 @@ app.get("/health/ready", async (_req, res) => {
         database: "connected",
       },
     });
-  } catch {
+  } catch (error) {
+    console.error("Database readiness check failed:", error);
     res.status(503).json({
       success: false,
       error: {
@@ -57,6 +60,8 @@ app.get("/health/ready", async (_req, res) => {
     });
   }
 });
+
+app.use("/api/v1/research-runs", researchRunsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

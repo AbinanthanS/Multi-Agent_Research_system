@@ -4,12 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test",
+    "test": "cross-env NODE_ENV=test node --test",
+    "test:integration": "cross-env NODE_ENV=test node --test tests/integration/*.test.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "lint": "eslint .",
     "db:migrate": "node-pg-migrate up --database-url-var MIGRATIONS_DATABASE_URL",
-    "db:migration:create": "node-pg-migrate create"
+    "db:migrate:create": "node-pg-migrate create",
+    "db:migrate:test": "node-pg-migrate up --database-url-var TEST_MIGRATIONS_DATABASE_URL"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "cross-env": "^10.1.0",
     "eslint": "^10.12.0",
     "globals": "^17.13.0",
     "node-pg-migrate": "^9.0.0"
