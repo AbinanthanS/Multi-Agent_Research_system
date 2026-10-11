@@ -4,10 +4,29 @@ import { env } from "./env.js";
 
 const { Pool } = pg;
 
-const connectionString =
+function normalizeConnectionString(urlString) {
+  if (!urlString) return urlString;
+  try {
+    const parsed = new URL(urlString);
+    if (
+      parsed.searchParams.get("sslmode") === "require" &&
+      !parsed.searchParams.has("uselibpqcompat")
+    ) {
+      parsed.searchParams.set("sslmode", "verify-full");
+      return parsed.toString();
+    }
+  } catch {
+    // Fall back to original connection string if parsing fails
+  }
+  return urlString;
+}
+
+const rawConnectionString =
   env.NODE_ENV === "test"
     ? env.TEST_DATABASE_URL
     : env.DATABASE_URL;
+
+const connectionString = normalizeConnectionString(rawConnectionString);
 
 export const pool = new Pool({
   connectionString,
