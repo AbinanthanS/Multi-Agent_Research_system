@@ -32,6 +32,10 @@ const envSchema = z
       .string()
       .min(1)
       .optional(),
+    SEMANTIC_SCHOLAR_API_KEY: z
+      .string()
+      .min(1)
+      .optional(),
   })
   .superRefine((config, ctx) => {
     if (
