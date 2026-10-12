@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 - **Project Name:** Multi-Agent Research System
-- **Current Milestone:** Pre-Phase 4 Preparation Complete (Gaps Resolved; Ready for Phase 4.1)
+- **Current Milestone:** Phase 4.1 Complete (AI Service Foundation, Async Database Pool & Readiness Probe)
 - **Repository URL:** `https://github.com/AbinanthanS/Multi-Agent_Research_system.git`
 - **Default Branch:** `main`
 
@@ -28,7 +28,28 @@
 
 ### Pre-Phase 4 Gap Resolution
 - **Pytest PYTHONPATH Fix:** Configured `pythonpath = ["."]` in `ai-service/pyproject.toml` so `pytest` executes directly from the virtual environment without module import errors.
-- **PostgreSQL SSL Mode Normalization:** Updated `backend/src/config/database.js` to normalize `sslmode=require` to `sslmode=verify-full`, resolving `pg-connection-string` deprecation warnings while ensuring strict TLS certificate validation.
+- **Repository Documentation:** Added comprehensive root `README.md` and `docs/PROJECT_STATUS.md`.
+
+### Phase 4.1: Python AI Service Foundation
+- **Configuration Management (`app/core/config.py`):**
+  - Built typed Pydantic `Settings` reading from environment variables and `.env` / `backend/.env`.
+  - Added support for `AI_PORT` and `PORT` with `effective_port` property (defaulting to 8000) to prevent port collisions with the Node backend.
+  - Implemented `effective_database_url` handling `TEST_DATABASE_URL` during test execution.
+  - Configured download size limits, timeouts, and connection pool parameters.
+- **Structured Logging (`app/core/logging.py`):**
+  - Standardized JSON-like structured logging format across the AI service with timestamp, logger name, log level, and message.
+- **Centralized Error Handling (`app/core/errors.py`):**
+  - Established `AppException` base exception with HTTP status codes and specific subclasses (`BadRequestError`, `NotFoundError`, `ConflictError`, `ServiceUnavailableError`).
+  - Implemented FastAPI exception handlers for `AppException`, Pydantic's `RequestValidationError` (422), and unhandled standard exceptions (500) with safe error redaction in production.
+- **Async Database Connection Pool (`app/core/database.py`):**
+  - Implemented asynchronous PostgreSQL pooling using `asyncpg` (`init_db_pool()`, `close_db_pool()`, `get_db_pool()`).
+  - Added `check_database_connection()` executing `SELECT 1` with configurable timeouts for readiness verification.
+- **FastAPI Lifespan Management & Health Endpoints (`app/main.py`, `app/schemas/health.py`):**
+  - Replaced deprecated startup/shutdown events with modern async `lifespan` context manager.
+  - Implemented `GET /health` (liveness probe) returning `{"status": "ok"}`.
+  - Implemented `GET /ready` and `GET /health/ready` (readiness probes) returning service status and database connectivity status. Returns HTTP 503 if the database is unreachable.
+- **Test Suite Expansion:**
+  - Added 12 comprehensive unit and integration tests (`test_config.py`, `test_health.py`, `test_ready.py`, `test_errors.py`).
 
 ---
 
@@ -40,11 +61,23 @@ multi-agent-research-system/
 │   ├── .venv/                 # Virtual environment
 │   ├── app/
 │   │   ├── __init__.py
-│   │   └── main.py            # FastAPI entry point
+│   │   ├── main.py            # FastAPI entry point & lifespan
+│   │   ├── core/              # Foundational utilities
+│   │   │   ├── __init__.py
+│   │   │   ├── config.py      # Pydantic Settings
+│   │   │   ├── database.py    # asyncpg connection pool & probe
+│   │   │   ├── errors.py      # Custom exceptions & handlers
+│   │   │   └── logging.py     # Structured logging
+│   │   └── schemas/           # Pydantic request/response schemas
+│   │       ├── __init__.py
+│   │       └── health.py      # Health & readiness schemas
 │   ├── tests/
-│   │   └── test_health.py     # Health endpoint tests
+│   │   ├── test_config.py     # Settings validation tests
+│   │   ├── test_errors.py     # Centralized error handler tests
+│   │   ├── test_health.py     # Health endpoint tests
+│   │   └── test_ready.py      # Readiness probe tests (mock & live)
 │   ├── pyproject.toml         # Pytest & Ruff configuration
-│   └── requirements.txt       # Dependencies (FastAPI, LangGraph, etc.)
+│   └── requirements.txt       # Dependencies (FastAPI, asyncpg, LangGraph, etc.)
 ├── backend/                   # Node.js 24 / Express 5 backend
 │   ├── migrations/            # node-pg-migrate schema migrations
 │   ├── src/
@@ -95,6 +128,8 @@ multi-agent-research-system/
 
 ### AI Service (`http://localhost:8000`)
 - `GET /health`: Liveness probe
+- `GET /ready`: Readiness probe (verifies async database pool connectivity)
+- `GET /health/ready`: Readiness probe alias
 
 ---
 
@@ -103,20 +138,20 @@ multi-agent-research-system/
 | Test Suite | Command | Result |
 | :--- | :--- | :--- |
 | Backend Lint | `npm run lint` (in `backend/`) | Passed (0 errors) |
-| Backend Unit + Integration | `npm run test` (in `backend/`) | Passed (7/7 tests passed) |
-| Backend Integration | `npm run test:integration` (in `backend/`) | Passed (3/3 test files passed) |
+| Backend Tests | `npm run test` (in `backend/`) | Passed (7/7 tests passed) |
 | AI Service Lint | `.\.venv\Scripts\ruff check` (in `ai-service/`) | Passed (0 errors) |
-| AI Service Tests | `.\.venv\Scripts\pytest` (in `ai-service/`) | Passed (1/1 test passed) |
+| AI Service Tests | `.\.venv\Scripts\pytest` (in `ai-service/`) | Passed (12/12 tests passed) |
 
 ---
 
 ## 7. Next Approved Task
-- **Phase 4.1:** Establish Python AI Service Foundation (Pydantic settings configuration, async database connectivity & readiness probe, structured logging, custom error handlers, and integration tests).
+- **Phase 4.2:** Safe PDF Download & Extraction (Streaming downloader with Content-Length + chunk counting limits, timeout guards, PyMuPDF / pymupdf text extractor, section header detection, and unit tests).
 
 ---
 
 ## 8. Important Architecture Decisions
 - **Optimistic Concurrency:** Research runs use an integer `version` field. Updates pass `expected_version` to prevent lost updates in multi-agent or asynchronous worker setups.
 - **Database Trigger Guard:** State transitions cannot be bypassed even by direct SQL updates; the database trigger enforces the state machine.
-- **PostgreSQL SSL Security:** Node uses `sslmode=verify-full` against Neon to ensure valid TLS CA certificate verification without triggering deprecated libpq compatibility warnings.
-- **Strict Separation of Concerns:** Node owns public API access and durable entity persistence. Python owns compute-heavy AI orchestration, document parsing, embeddings, and LangGraph workflow execution.
+- **Async Database Access in AI Service:** Uses `asyncpg` connection pooling for non-blocking database queries in FastAPI without thread pool overhead.
+- **Port Isolation:** `effective_port` allows the AI service and Express backend to share root or local `.env` files without port collision.
+- **Strict Separation of Concerns:** Node owns public API access, authentication, and durable entity persistence. Python owns compute-heavy AI orchestration, document parsing, embeddings, and LangGraph workflow execution.
