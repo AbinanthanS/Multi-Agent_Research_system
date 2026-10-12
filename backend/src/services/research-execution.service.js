@@ -30,17 +30,21 @@ export async function executeResearchWorkflow(runId) {
     );
   }
 
-  // Update status to running
+  // Update status to running (reset through pending if previous run failed/cancelled)
   let currentRun = run;
+  if (currentRun.status === "failed" || currentRun.status === "cancelled") {
+    currentRun = await updateResearchRun(runId, { status: "pending" }, currentRun.version);
+  }
   if (currentRun.status !== "running") {
     currentRun = await updateResearchRun(runId, { status: "running" }, currentRun.version);
   }
 
   try {
-    // Call Python AI Service
+    // Call Python AI Service (with 5-minute timeout)
     const aiResponse = await fetch(`${env.AI_SERVICE_URL}/api/v1/research/execute`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(300_000),
       body: JSON.stringify({
         run_id: runId,
         question: currentRun.question,

@@ -119,3 +119,47 @@ This document chronicles real engineering challenges encountered, debugging proc
 - **Solution:** Refactored the extractor to inspect the first line, update the active section context, and preserve subsequent lines in the block as valid body paragraphs.
 - **Interview Key Point:** Spatial document blocks often bundle heterogeneous elements (headings + body). Parsing must split line boundaries before classifying block roles.
 
+---
+
+## Phase 6: Frontend Engineering — Problems & Decisions
+
+### Challenge 11: No External Router — State-Based Navigation
+- **Context:** Two-screen SPA (Dashboard → RunDetail). Could use react-router-dom.
+- **Decision:** Used React `useState` to track the current view instead of a URL router.
+- **Trade-off:** Simpler bundle, no URL persistence (page refresh returns to dashboard). For a production app you'd add react-router for deep-linking.
+- **Interview Key Point:** *"When is a URL router overkill?"* — For a 2-screen internal tool, routing adds ~10kB overhead and configuration complexity without proportional user benefit. The pattern is common in embedded dashboards and Electron apps.
+
+### Challenge 12: CORS vs Dev Proxy Pattern
+- **Symptom:** Direct `fetch('/api/...')` from the React dev server on port 5173 would hit a CORS error when calling the Express backend on port 3000.
+- **Solution:** Configured `vite.config.js` `server.proxy` to forward `/api` → `localhost:3000`. This avoids CORS entirely because the browser sees all traffic as same-origin.
+- **Interview Key Point:** Vite's proxy is a development tool only. In production, the frontend is served from the same origin (e.g., Nginx reverse proxy) or CORS headers are added to the Express backend.
+
+### Challenge 13: Live Status Polling vs WebSockets
+- **Context:** Research runs can take 30–120 seconds. The UI must show live status without user refresh.
+- **Decision:** Used a `usePolling` hook (setInterval-based, 4 s) instead of WebSockets.
+- **Trade-off:** WebSockets are more efficient for high-frequency updates; polling causes redundant API calls when the run is idle. For 4-second intervals with a few concurrent users, polling is simpler to implement, debug, and scale (no persistent connection state on the server).
+- **Interview Key Point:** Polling is appropriate for low-frequency, low-concurrency real-time UX. SSE (Server-Sent Events) is a middle ground — one-directional stream without WebSocket overhead.
+
+### Challenge 14: Markdown Rendering Safety (marked + XSS)
+- **Context:** The AI synthesizer outputs arbitrary markdown. Rendering raw HTML from untrusted content risks XSS.
+- **Decision:** Used `marked.parse()` with GitHub-Flavored Markdown. The report content comes from our own AI pipeline (not user input), so risk is low, but `DOMPurify` would be added in production.
+- **Interview Key Point:** When rendering user-supplied or AI-generated HTML, always sanitise with DOMPurify or a similar library before injecting via `dangerouslySetInnerHTML`.
+
+### Challenge 15: Defensive API Client Design
+- **Context:** `fetch` does not throw on non-2xx responses by default.
+- **Solution:** Wrapped all calls in a `request()` helper that reads the body, attempts JSON parse, and throws a structured `Error` with `.status` and `.data` properties on non-2xx responses.
+- **Interview Key Point:** Centralised HTTP clients are a key pattern for maintainability — error handling, auth headers, and base URL configuration live in one place rather than duplicated across every component.
+
+---
+
+## 3. Architecture Decision Summary (For System Design Interviews)
+
+| Decision | Choice | Alternatives Considered | Rationale |
+|---|---|---|---|
+| Frontend Framework | React 19 + Vite 8 | Next.js, SvelteKit | Lightweight, fast HMR, no SSR needed for internal tool |
+| Styling | Vanilla CSS custom properties | TailwindCSS | Zero build overhead, full theme control via CSS vars |
+| Routing | State machine (useState) | react-router-dom | Only 2 screens; URL routing adds complexity without benefit |
+| Real-time | Polling (4 s) | WebSockets, SSE | Low-frequency updates, simple to debug and scale |
+| Markdown | marked | react-markdown | Smaller bundle, synchronous, easier to configure |
+| API Layer | Centralised `api.js` module | Axios, react-query | No caching needed; simple fetch wrapper sufficient |
+| State Mgmt | React useState/useCallback | Redux, Zustand | App complexity is low; global state not needed |

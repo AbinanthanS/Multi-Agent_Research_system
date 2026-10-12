@@ -8,6 +8,11 @@ const server = app.listen(env.PORT, () => {
   );
 });
 
+// Configure 5-minute timeout for heavy AI execution pipelines
+server.timeout = 300_000;
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+
 let isShuttingDown = false;
 
 function shutdown(signal) {

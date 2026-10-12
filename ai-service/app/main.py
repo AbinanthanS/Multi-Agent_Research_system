@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
+import app.core.network  # noqa: F401 - ensure IPv4 precedence on Windows
 from fastapi import FastAPI, status
 
 from app.api.research import router as research_router

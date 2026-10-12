@@ -1,7 +1,7 @@
 """Research execution router.
 
 Exposes the core AI pipeline coordinating PDF extraction, passage chunking,
-and LangGraph multi-agent synthesis.
+vector embedding generation, and LangGraph multi-agent synthesis.
 """
 
 from __future__ import annotations
@@ -21,14 +21,15 @@ from app.services.pdf_extractor import (
     download_pdf_safely,
     extract_pdf_pages_and_sections,
 )
+from app.services.vector_search import embed_and_store_passages
 
 logger = logging.getLogger("ai_service.api.research")
 
 router = APIRouter(prefix="/api/v1/research", tags=["research"])
 
 
-async def _process_single_paper(paper_dict: dict) -> list[dict]:
-    """Download PDF if available, otherwise chunk abstract."""
+async def _process_single_paper(paper_dict: dict, download_pdf: bool = True) -> list[dict]:
+    """Download PDF if available and permitted, otherwise chunk abstract."""
     paper_id = paper_dict["id"]
     pdf_url = paper_dict.get("pdf_url")
     title = paper_dict.get("title", "Untitled")
@@ -36,14 +37,15 @@ async def _process_single_paper(paper_dict: dict) -> list[dict]:
 
     extracted_pages = []
 
-    if pdf_url:
+    if download_pdf and pdf_url:
         try:
             logger.info(
                 "Attempting PDF download for paper %s from %s", paper_id, pdf_url
             )
-            # Cap download at 15 MB and 15s for API latency
-            pdf_bytes = await download_pdf_safely(pdf_url, timeout_secs=15.0)
-            extracted_pages = extract_pdf_pages_and_sections(pdf_bytes)
+            pdf_bytes = await download_pdf_safely(pdf_url, timeout_secs=10.0)
+            pages = extract_pdf_pages_and_sections(pdf_bytes)
+            # Cap at first 8 pages (intro, methods, results) to avoid passage bloat
+            extracted_pages = pages[:8]
             logger.info(
                 "Extracted %d pages for paper %s", len(extracted_pages), paper_id
             )
@@ -72,9 +74,12 @@ async def execute_research(payload: ResearchExecuteRequest) -> ResearchExecuteRe
         len(payload.papers),
     )
 
-    # 1. Concurrently process papers (download PDFs or fallback to abstracts)
+    # 1. Concurrently process papers: full PDF for top 3 papers, fast abstract chunks for remainder
     papers_data = [p.model_dump() for p in payload.papers]
-    tasks = [_process_single_paper(p) for p in papers_data]
+    tasks = [
+        _process_single_paper(p, download_pdf=(idx < 3))
+        for idx, p in enumerate(papers_data)
+    ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     all_passages: list[dict] = []
@@ -84,16 +89,26 @@ async def execute_research(payload: ResearchExecuteRequest) -> ResearchExecuteRe
 
     logger.info("Generated %d passages across candidate papers", len(all_passages))
 
-    # 2. Invoke LangGraph multi-agent research pipeline
+    # 2. Generate and store vector embeddings for RAG retrieval
+    #    This is non-blocking: if Gemini is unavailable the passages are returned
+    #    unchanged and the pipeline continues with token-overlap retrieval.
+    try:
+        all_passages = await embed_and_store_passages(all_passages)
+        logger.info("Embedding step complete for %d passages", len(all_passages))
+    except Exception as exc:
+        logger.warning("Embedding step failed (non-fatal): %s", exc)
+
+    # 3. Invoke LangGraph multi-agent research pipeline
     initial_state = {
-        "question": payload.question,
-        "papers": papers_data,
-        "passages": all_passages,
-        "sub_queries": [],
-        "claims": [],
-        "claim_evidence": [],
-        "report_title": "",
-        "markdown_content": "",
+        "question":          payload.question,
+        "run_id":            payload.run_id,   # passed to extractor for vector search
+        "papers":            papers_data,
+        "passages":          all_passages,
+        "sub_queries":       [],
+        "claims":            [],
+        "claim_evidence":    [],
+        "report_title":      "",
+        "markdown_content":  "",
         "structured_content": {},
     }
 

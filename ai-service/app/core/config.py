@@ -37,12 +37,31 @@ class Settings(BaseSettings):
         description="HTTP download timeout in seconds",
     )
 
+    # ── Gemini / LLM settings ──────────────────────────────────────────
+    GEMINI_API_KEY: str | None = Field(
+        default=None,
+        description="Google Gemini API key for LLM and embedding calls",
+    )
+    GEMINI_MODEL: str = Field(
+        default="gemini-3.5-flash-lite",
+        description="Gemini generative model identifier",
+    )
+    GEMINI_EMBEDDING_MODEL: str = Field(
+        default="gemini-embedding-001",
+        description="Gemini embedding model for RAG vector search",
+    )
+
     @field_validator("LOG_LEVEL", mode="before")
     @classmethod
     def normalize_log_level(cls, v: str) -> str:
         if isinstance(v, str):
             return v.upper()
         return "INFO"
+
+    @property
+    def gemini_enabled(self) -> bool:
+        """True when a Gemini API key is configured."""
+        return bool(self.GEMINI_API_KEY)
 
     @property
     def effective_port(self) -> int:

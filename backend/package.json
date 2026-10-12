@@ -7,7 +7,7 @@
     "test": "cross-env NODE_ENV=test node --test --test-concurrency=1",
     "test:integration": "cross-env NODE_ENV=test node --test --test-concurrency=1 tests/integration/*.test.js",
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "dev": "node --watch --watch-path=src src/server.js",
     "lint": "eslint .",
     "db:migrate": "node-pg-migrate up --database-url-var MIGRATIONS_DATABASE_URL",
     "db:migrate:create": "node-pg-migrate create",

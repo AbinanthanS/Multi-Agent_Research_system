@@ -143,12 +143,12 @@ def extract_pdf_pages_and_sections(
                 else:
                     page_paragraphs.append(raw_text)
 
-        full_page_text = "\n\n".join(page_paragraphs).strip()
+        full_page_text = "\n\n".join(page_paragraphs).strip().replace("\x00", "")
         if full_page_text:
             extracted.append(
                 {
                     "page_number": page_number,
-                    "section": current_section,
+                    "section": current_section.replace("\x00", ""),
                     "text": full_page_text,
                 }
             )

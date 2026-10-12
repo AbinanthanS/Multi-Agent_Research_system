@@ -93,7 +93,7 @@ def process_paper_into_passages(
                     "id": str(uuid.uuid4()),
                     "paper_id": paper_id,
                     "passage_index": passage_index,
-                    "text": chunk,
+                    "text": chunk.replace("\x00", ""),
                     "page_number": 1,
                     "section": "Abstract",
                 }
@@ -105,7 +105,7 @@ def process_paper_into_passages(
         for page_data in extracted_pages:
             page_text = page_data.get("text", "")
             page_num = page_data.get("page_number", 1)
-            section = page_data.get("section", "Body")
+            section = str(page_data.get("section", "Body")).replace("\x00", "")
 
             chunks = chunk_text(page_text, target_chunk_chars=600)
             for chunk in chunks:
@@ -114,7 +114,7 @@ def process_paper_into_passages(
                         "id": str(uuid.uuid4()),
                         "paper_id": paper_id,
                         "passage_index": passage_index,
-                        "text": chunk,
+                        "text": chunk.replace("\x00", ""),
                         "page_number": page_num,
                         "section": section,
                     }

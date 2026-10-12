@@ -22,23 +22,45 @@ export async function findPapersByRunId(runId, db = pool) {
   return result.rows;
 }
 
+const cleanStr = (val) => (typeof val === "string" ? val.replace(/\0/g, "") : val);
+
 export async function persistPassages(passages, db = pool) {
   if (!passages || passages.length === 0) return [];
 
+  const BATCH_SIZE = 100;
   const inserted = [];
-  for (const p of passages) {
-    const res = await db.query(
-      `
-        INSERT INTO paper_passages (
-          id, paper_id, passage_index, text, page_number, section
-        )
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (id) DO NOTHING
-        RETURNING id, paper_id, passage_index, page_number, section
-      `,
-      [p.id, p.paper_id, p.passage_index, p.text, p.page_number, p.section],
-    );
-    if (res.rows[0]) inserted.push(res.rows[0]);
+
+  for (let i = 0; i < passages.length; i += BATCH_SIZE) {
+    const chunk = passages.slice(i, i + BATCH_SIZE);
+    const values = [];
+    const valuePlaceholders = [];
+
+    chunk.forEach((p, idx) => {
+      const base = idx * 6;
+      valuePlaceholders.push(
+        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`,
+      );
+      values.push(
+        p.id,
+        p.paper_id,
+        p.passage_index,
+        cleanStr(p.text),
+        p.page_number,
+        cleanStr(p.section),
+      );
+    });
+
+    const query = `
+      INSERT INTO paper_passages (
+        id, paper_id, passage_index, text, page_number, section
+      )
+      VALUES ${valuePlaceholders.join(", ")}
+      ON CONFLICT (id) DO NOTHING
+      RETURNING id, paper_id, passage_index, page_number, section
+    `;
+
+    const res = await db.query(query, values);
+    inserted.push(...res.rows);
   }
   return inserted;
 }
@@ -49,29 +71,56 @@ export async function persistClaimsAndEvidence(
   evidenceList,
   db = pool,
 ) {
-  for (const c of claims) {
+  if (claims && claims.length > 0) {
+    const claimValues = [];
+    const claimPlaceholders = [];
+    claims.forEach((c, idx) => {
+      const base = idx * 5;
+      claimPlaceholders.push(
+        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`,
+      );
+      claimValues.push(
+        c.id,
+        runId,
+        cleanStr(c.claim_text),
+        cleanStr(c.claim_type),
+        c.confidence,
+      );
+    });
+
     await db.query(
       `
-        INSERT INTO claims (
-          id, run_id, claim_text, claim_type, confidence
-        )
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO claims (id, run_id, claim_text, claim_type, confidence)
+        VALUES ${claimPlaceholders.join(", ")}
         ON CONFLICT (id) DO NOTHING
       `,
-      [c.id, runId, c.claim_text, c.claim_type, c.confidence],
+      claimValues,
     );
   }
 
-  for (const e of evidenceList) {
+  if (evidenceList && evidenceList.length > 0) {
+    const evValues = [];
+    const evPlaceholders = [];
+    evidenceList.forEach((e, idx) => {
+      const base = idx * 4;
+      evPlaceholders.push(
+        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`,
+      );
+      evValues.push(
+        e.claim_id,
+        e.passage_id,
+        cleanStr(e.support_type),
+        cleanStr(e.explanation),
+      );
+    });
+
     await db.query(
       `
-        INSERT INTO claim_evidence (
-          claim_id, passage_id, support_type, explanation
-        )
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO claim_evidence (claim_id, passage_id, support_type, explanation)
+        VALUES ${evPlaceholders.join(", ")}
         ON CONFLICT (claim_id, passage_id) DO NOTHING
       `,
-      [e.claim_id, e.passage_id, e.support_type, e.explanation],
+      evValues,
     );
   }
 }
@@ -95,9 +144,9 @@ export async function persistReport(runId, report, db = pool) {
     [
       runId,
       version,
-      report.title,
-      report.markdown_content,
-      JSON.stringify(report.structured_content ?? {}),
+      cleanStr(report.title),
+      cleanStr(report.markdown_content),
+      cleanStr(JSON.stringify(report.structured_content ?? {})),
     ],
   );
 
