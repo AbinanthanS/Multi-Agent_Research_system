@@ -58,6 +58,16 @@ class Settings(BaseSettings):
             return self.TEST_DATABASE_URL
         return self.DATABASE_URL
 
+    @property
+    def max_pdf_size_bytes(self) -> int:
+        """Maximum allowed PDF download size in bytes."""
+        return self.MAX_PDF_SIZE_BYTES
+
+    @property
+    def download_timeout_secs(self) -> int:
+        """HTTP download timeout in seconds."""
+        return self.PDF_DOWNLOAD_TIMEOUT_SECONDS
+
 
 @lru_cache
 def get_settings() -> Settings:

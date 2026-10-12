@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "cross-env NODE_ENV=test node --test",
-    "test:integration": "cross-env NODE_ENV=test node --test tests/integration/*.test.js",
+    "test": "cross-env NODE_ENV=test node --test --test-concurrency=1",
+    "test:integration": "cross-env NODE_ENV=test node --test --test-concurrency=1 tests/integration/*.test.js",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "lint": "eslint .",

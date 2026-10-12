@@ -96,15 +96,15 @@ def register_exception_handlers(app: FastAPI) -> None:
         errors = []
         for err in exc.errors():
             loc = " -> ".join(str(item) for item in err.get("loc", []))
-            errors.append({
-                "field": loc,
-                "message": err.get("msg", "Validation error"),
-                "type": err.get("type", "value_error"),
-            })
+            errors.append(
+                {
+                    "field": loc,
+                    "message": err.get("msg", "Validation error"),
+                    "type": err.get("type", "value_error"),
+                }
+            )
 
-        status_code = getattr(
-            status, "HTTP_422_UNPROCESSABLE_CONTENT", 422
-        )
+        status_code = getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422)
         return JSONResponse(
             status_code=status_code,
             content={

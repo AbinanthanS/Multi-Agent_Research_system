@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 - **Project Name:** Multi-Agent Research System
-- **Current Milestone:** Phase 4.1 Complete (AI Service Foundation, Async Database Pool & Readiness Probe)
+- **Current Milestone:** Phase 4 & Phase 5 Complete (AI Pipeline, LangGraph Multi-Agent System & End-to-End Orchestration)
 - **Repository URL:** `https://github.com/AbinanthanS/Multi-Agent_Research_system.git`
 - **Default Branch:** `main`
 
@@ -26,30 +26,37 @@
 - Implemented transactional rollback ensuring atomic persistence of discovered papers.
 - Endpoint: `POST /api/v1/research-runs/:id/papers/discover`.
 
-### Pre-Phase 4 Gap Resolution
-- **Pytest PYTHONPATH Fix:** Configured `pythonpath = ["."]` in `ai-service/pyproject.toml` so `pytest` executes directly from the virtual environment without module import errors.
-- **Repository Documentation:** Added comprehensive root `README.md` and `docs/PROJECT_STATUS.md`.
+### Phase 4: Python AI Service & LangGraph Multi-Agent Research Pipeline
+- **AI Service Foundation (`app/core/`):**
+  - Typed Pydantic Settings supporting `AI_PORT`, `effective_port`, `effective_database_url`, download timeouts, and size caps.
+  - Asynchronous PostgreSQL pool with `asyncpg` and health/readiness probes.
+  - Centralized domain error hierarchy (`AppException`) and structured logging.
+- **Safe PDF Downloader & Extractor (`app/services/pdf_extractor.py`):**
+  - Implemented streaming downloader via `httpx.stream()` with pre-flight `Content-Length` checks and chunk-level byte counting enforcing hard payload limits (25 MB).
+  - In-memory parsing using `pymupdf` (PyMuPDF) extracting page text, page numbers, and detected section headings.
+- **Semantic Chunking (`app/services/chunking.py`):**
+  - Overlapping sentence-boundary-preserving text chunker processing abstract text and extracted page blocks into structured passages.
+- **LangGraph Multi-Agent Workflow (`app/agents/research_graph.py`):**
+  - **Planner Agent:** Decomposes research question into specialized thematic facets.
+  - **Extractor Agent:** Scans passages, scores relevance using semantic token overlap, and formulates candidate claims.
+  - **Critic / Fact-Checker Agent:** Validates claims against evidence passages, assigns groundedness confidence scores, and classifies support type (`supporting`, `contextual`, `contradicting`).
+  - **Synthesizer Agent:** Generates publication-grade Markdown reports with executive summaries, evidence tables, passage citations, and structured JSON output.
+- **AI Execution Endpoint (`POST /api/v1/research/execute`):**
+  - Asynchronously processes multiple papers concurrently, executes the LangGraph workflow in thread pools without blocking the asyncio loop, and returns structured results.
 
-### Phase 4.1: Python AI Service Foundation
-- **Configuration Management (`app/core/config.py`):**
-  - Built typed Pydantic `Settings` reading from environment variables and `.env` / `backend/.env`.
-  - Added support for `AI_PORT` and `PORT` with `effective_port` property (defaulting to 8000) to prevent port collisions with the Node backend.
-  - Implemented `effective_database_url` handling `TEST_DATABASE_URL` during test execution.
-  - Configured download size limits, timeouts, and connection pool parameters.
-- **Structured Logging (`app/core/logging.py`):**
-  - Standardized JSON-like structured logging format across the AI service with timestamp, logger name, log level, and message.
-- **Centralized Error Handling (`app/core/errors.py`):**
-  - Established `AppException` base exception with HTTP status codes and specific subclasses (`BadRequestError`, `NotFoundError`, `ConflictError`, `ServiceUnavailableError`).
-  - Implemented FastAPI exception handlers for `AppException`, Pydantic's `RequestValidationError` (422), and unhandled standard exceptions (500) with safe error redaction in production.
-- **Async Database Connection Pool (`app/core/database.py`):**
-  - Implemented asynchronous PostgreSQL pooling using `asyncpg` (`init_db_pool()`, `close_db_pool()`, `get_db_pool()`).
-  - Added `check_database_connection()` executing `SELECT 1` with configurable timeouts for readiness verification.
-- **FastAPI Lifespan Management & Health Endpoints (`app/main.py`, `app/schemas/health.py`):**
-  - Replaced deprecated startup/shutdown events with modern async `lifespan` context manager.
-  - Implemented `GET /health` (liveness probe) returning `{"status": "ok"}`.
-  - Implemented `GET /ready` and `GET /health/ready` (readiness probes) returning service status and database connectivity status. Returns HTTP 503 if the database is unreachable.
-- **Test Suite Expansion:**
-  - Added 12 comprehensive unit and integration tests (`test_config.py`, `test_health.py`, `test_ready.py`, `test_errors.py`).
+### Phase 5: End-to-End Backend Orchestration & Persistence
+- **Execution Repository (`backend/src/repositories/research-execution.repository.js`):**
+  - Atomic persistence of passages (`paper_passages`), claims (`claims`), evidence (`claim_evidence`), and versioned reports (`reports`).
+  - Support for multi-version reports and rich queries joining claims with cited passages.
+- **Execution Service & Controller (`backend/src/services/research-execution.service.js`):**
+  - Orchestrates research lifecycle: transitions run to `running`, calls AI service, executes transactional database insertion, transitions to `completed`, with automatic `failed` error recovery.
+  - Enforces database check constraint invariants for `support_type IN ('supporting', 'contradicting', 'contextual')`.
+- **New Endpoints:**
+  - `POST /api/v1/research-runs/:id/execute`
+  - `GET /api/v1/research-runs/:id/report`
+  - `GET /api/v1/research-runs/:id/claims`
+- **Integration Test Harness:**
+  - Configured `--test-concurrency=1` to ensure reliable non-flaky test execution against Neon cloud PostgreSQL.
 
 ---
 
@@ -62,22 +69,34 @@ multi-agent-research-system/
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── main.py            # FastAPI entry point & lifespan
+│   │   ├── agents/            # LangGraph multi-agent research workflow
+│   │   │   ├── __init__.py
+│   │   │   └── research_graph.py
+│   │   ├── api/               # API routers
+│   │   │   ├── __init__.py
+│   │   │   └── research.py    # POST /api/v1/research/execute
 │   │   ├── core/              # Foundational utilities
 │   │   │   ├── __init__.py
 │   │   │   ├── config.py      # Pydantic Settings
 │   │   │   ├── database.py    # asyncpg connection pool & probe
 │   │   │   ├── errors.py      # Custom exceptions & handlers
 │   │   │   └── logging.py     # Structured logging
-│   │   └── schemas/           # Pydantic request/response schemas
-│   │       ├── __init__.py
-│   │       └── health.py      # Health & readiness schemas
+│   │   ├── schemas/           # Pydantic request/response schemas
+│   │   │   ├── __init__.py
+│   │   │   ├── health.py      # Health & readiness schemas
+│   │   │   └── research.py    # Research execute schemas
+│   │   └── services/          # Document processing
+│   │       ├── chunking.py    # Text chunking & passage segmentation
+│   │       └── pdf_extractor.py # Streaming downloader & PyMuPDF extractor
 │   ├── tests/
 │   │   ├── test_config.py     # Settings validation tests
 │   │   ├── test_errors.py     # Centralized error handler tests
 │   │   ├── test_health.py     # Health endpoint tests
-│   │   └── test_ready.py      # Readiness probe tests (mock & live)
+│   │   ├── test_pdf_extractor.py # PDF extractor & download tests
+│   │   ├── test_ready.py      # Readiness probe tests
+│   │   └── test_research_pipeline.py # LangGraph & execute API tests
 │   ├── pyproject.toml         # Pytest & Ruff configuration
-│   └── requirements.txt       # Dependencies (FastAPI, asyncpg, LangGraph, etc.)
+│   └── requirements.txt       # Dependencies (FastAPI, asyncpg, PyMuPDF, LangGraph)
 ├── backend/                   # Node.js 24 / Express 5 backend
 │   ├── migrations/            # node-pg-migrate schema migrations
 │   ├── src/
@@ -93,29 +112,13 @@ multi-agent-research-system/
 │   │   └── server.js          # HTTP server listener
 │   └── tests/                 # Unit, provider, and integration test suites
 └── docs/
+    ├── INTERVIEW_NOTES.md     # Problems faced, root causes, and interview solutions
     └── PROJECT_STATUS.md      # Persistent status and handoff notes
 ```
 
 ---
 
-## 4. Database Migrations & Schema
-
-1. `1791661135500_initial-schema.js`:
-   - `research_runs` (UUID PK, question, status, filters, started_at, completed_at, error_message, timestamps)
-   - `papers` (UUID PK, source, source_id, doi, title, abstract, authors, published_year, url, pdf_url, metadata, timestamps)
-   - `research_run_papers` (composite PK: `run_id`, `paper_id`, relevance_score, discovery_source, added_at)
-   - `paper_passages` (UUID PK, paper_id, passage_index, text, page_number, section, created_at)
-   - `claims` (UUID PK, run_id, claim_text, claim_type, confidence, created_at)
-   - `claim_evidence` (composite PK: `claim_id`, `passage_id`, support_type, explanation, created_at)
-   - `reports` (UUID PK, run_id, version, title, markdown_content, structured_content, created_at)
-2. `1791703709439_add-research-run-version.js`:
-   - Added `version integer NOT NULL DEFAULT 1` to `research_runs`.
-3. `1791706133827_add-status-transition-guard.js`:
-   - Pl/pgSQL trigger function `enforce_research_run_status_transition()` enforcing valid transitions (`pending` -> `running` / `cancelled`; `running` -> `completed` / `failed` / `cancelled`; `failed` / `cancelled` -> `pending`).
-
----
-
-## 5. API Endpoints
+## 4. API Endpoints Summary
 
 ### Backend (`http://localhost:5000`)
 - `GET /health`: Liveness probe
@@ -125,33 +128,28 @@ multi-agent-research-system/
 - `GET /api/v1/research-runs/:id`: Get research run details
 - `PATCH /api/v1/research-runs/:id`: Update run status with optimistic concurrency
 - `POST /api/v1/research-runs/:id/papers/discover`: Discover and persist papers for a run
+- `POST /api/v1/research-runs/:id/execute`: Orchestrate full AI pipeline & persist results
+- `GET /api/v1/research-runs/:id/report`: Fetch latest synthesized markdown & structured report
+- `GET /api/v1/research-runs/:id/claims`: Fetch synthesized claims with linked evidence passages
 
 ### AI Service (`http://localhost:8000`)
 - `GET /health`: Liveness probe
 - `GET /ready`: Readiness probe (verifies async database pool connectivity)
 - `GET /health/ready`: Readiness probe alias
+- `POST /api/v1/research/execute`: Execute PDF extraction, chunking, and LangGraph multi-agent research graph
 
 ---
 
-## 6. Verification Commands & Results
+## 5. Verification Commands & Results
 
 | Test Suite | Command | Result |
 | :--- | :--- | :--- |
-| Backend Lint | `npm run lint` (in `backend/`) | Passed (0 errors) |
-| Backend Tests | `npm run test` (in `backend/`) | Passed (7/7 tests passed) |
-| AI Service Lint | `.\.venv\Scripts\ruff check` (in `ai-service/`) | Passed (0 errors) |
-| AI Service Tests | `.\.venv\Scripts\pytest` (in `ai-service/`) | Passed (12/12 tests passed) |
+| Backend Lint | `npm run lint` (in `backend/`) | **Passed** (0 errors) |
+| Backend Tests | `npm run test` (in `backend/`) | **Passed** (8/8 tests passed against live DB) |
+| AI Service Lint | `.\.venv\Scripts\ruff check` (in `ai-service/`) | **Passed** (0 errors) |
+| AI Service Tests | `.\.venv\Scripts\pytest` (in `ai-service/`) | **Passed** (19/19 tests passed) |
 
 ---
 
-## 7. Next Approved Task
-- **Phase 4.2:** Safe PDF Download & Extraction (Streaming downloader with Content-Length + chunk counting limits, timeout guards, PyMuPDF / pymupdf text extractor, section header detection, and unit tests).
-
----
-
-## 8. Important Architecture Decisions
-- **Optimistic Concurrency:** Research runs use an integer `version` field. Updates pass `expected_version` to prevent lost updates in multi-agent or asynchronous worker setups.
-- **Database Trigger Guard:** State transitions cannot be bypassed even by direct SQL updates; the database trigger enforces the state machine.
-- **Async Database Access in AI Service:** Uses `asyncpg` connection pooling for non-blocking database queries in FastAPI without thread pool overhead.
-- **Port Isolation:** `effective_port` allows the AI service and Express backend to share root or local `.env` files without port collision.
-- **Strict Separation of Concerns:** Node owns public API access, authentication, and durable entity persistence. Python owns compute-heavy AI orchestration, document parsing, embeddings, and LangGraph workflow execution.
+## 6. Next Milestone
+- **Phase 6: Modern Interactive Frontend Web Application** (React + Vite + Vanilla CSS design system, dark mode, run lifecycle dashboard, live status polling, paper discovery explorer, claims & evidence inspector, and interactive Markdown report viewer with citation previews).

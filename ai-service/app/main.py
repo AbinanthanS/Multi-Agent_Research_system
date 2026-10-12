@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, status
 
+from app.api.research import router as research_router
 from app.core.config import get_settings
 from app.core.database import (
     check_database_connection,
@@ -30,9 +31,7 @@ async def lifespan(_app: FastAPI):
     try:
         await init_db_pool()
     except Exception as exc:
-        logger.warning(
-            "Database pool initialization warning during startup: %s", exc
-        )
+        logger.warning("Database pool initialization warning during startup: %s", exc)
 
     yield
 
@@ -52,6 +51,9 @@ app = FastAPI(
 
 # Attach centralized error handlers
 register_exception_handlers(app)
+
+# Mount API routes
+app.include_router(research_router)
 
 
 @app.get(

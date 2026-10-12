@@ -34,6 +34,7 @@ pydantic==2.14.0
 pydantic-settings==2.15.0
 pydantic_core==2.50.0
 Pygments==2.21.0
+pymupdf==1.28.2
 pytest==9.1.1
 pytest-asyncio==1.4.0
 python-dotenv==1.2.4

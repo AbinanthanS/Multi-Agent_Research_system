@@ -9,7 +9,10 @@ def test_settings_default_values():
     )
     assert settings.ENVIRONMENT == "development"
     assert settings.effective_port in (8000, 5000)
-    assert settings.effective_database_url == "postgresql://user:pass@localhost:5432/testdb"
+    assert (
+        settings.effective_database_url
+        == "postgresql://user:pass@localhost:5432/testdb"
+    )
     assert settings.MAX_PDF_SIZE_BYTES == 25 * 1024 * 1024
 
 
@@ -27,7 +30,10 @@ def test_settings_test_environment_url_override():
         DATABASE_URL="postgresql://user:pass@localhost:5432/devdb",
         TEST_DATABASE_URL="postgresql://user:pass@localhost:5432/testdb",
     )
-    assert settings.effective_database_url == "postgresql://user:pass@localhost:5432/testdb"
+    assert (
+        settings.effective_database_url
+        == "postgresql://user:pass@localhost:5432/testdb"
+    )
 
 
 def test_settings_log_level_normalization():

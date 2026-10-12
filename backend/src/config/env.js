@@ -36,6 +36,10 @@ const envSchema = z
       .string()
       .min(1)
       .optional(),
+    AI_SERVICE_URL: z
+      .string()
+      .url()
+      .default("http://127.0.0.1:8000"),
   })
   .superRefine((config, ctx) => {
     if (
