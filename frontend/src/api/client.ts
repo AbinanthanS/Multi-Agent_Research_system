@@ -11,6 +11,7 @@ import type {
 } from "../types/domain";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+const HEALTH_URL = `${API_BASE.replace(/\/api\/v1\/?$/, "")}/health`;
 
 export class ApiClientError extends Error {
   status: number;
@@ -211,7 +212,7 @@ export const api = {
   async getHealth(signal?: AbortSignal): Promise<HealthStatus> {
     let response: Response;
     try {
-      response = await fetch("/health", { signal });
+      response = await fetch(HEALTH_URL, { signal });
     } catch {
       throw new ApiClientError("Health endpoint is unreachable", 0);
     }
