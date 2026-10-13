@@ -127,7 +127,12 @@ export async function discoverPapers(runId) {
   };
 
   const warnings = [];
-
+if (semanticScholarResult.status === "rejected") {
+  console.error("Semantic Scholar failed:", semanticScholarResult.reason?.message);
+}
+if (arxivResult.status === "rejected") {
+  console.error("arXiv failed:", arxivResult.reason?.message);
+}
   if (arxivResult.status === "rejected") {
     warnings.push({
       provider: "arxiv",
