@@ -16,7 +16,6 @@ const envSchema = z
 
     CORS_ORIGIN: z
       .string()
-      .url()
       .default("http://localhost:5173"),
 
     DATABASE_URL: z

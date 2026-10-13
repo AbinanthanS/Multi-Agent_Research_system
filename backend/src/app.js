@@ -16,9 +16,23 @@ app.disable("x-powered-by");
 
 app.use(helmet());
 
+const allowedOrigins =
+  env.CORS_ORIGIN === "*"
+    ? "*"
+    : env.CORS_ORIGIN.split(",").map((s) => s.trim());
+
 app.use(
   cors({
-    origin: env.CORS_ORIGIN,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins === "*" || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      if (origin.endsWith(".vercel.app")) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
   }),
 );
 
