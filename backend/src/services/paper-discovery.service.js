@@ -16,6 +16,7 @@ import { searchArxiv } from "../providers/papers/arxiv.js";
 import {
   searchSemanticScholar,
 } from "../providers/papers/semantic-scholar.js";
+import { searchOpenAlex } from "../providers/papers/openalex.js";
 import { ApiError } from "../utils/api-error.js";
 
 function paperIdentity(paper) {
@@ -29,19 +30,17 @@ function paperIdentity(paper) {
 }
 
 // Alternate providers so one provider doesn't fill the whole result list first.
-function mergePapers(arxivPapers, semanticScholarPapers, limit) {
+function mergePapers(providerPapers, limit) {
   const merged = [];
   const seen = new Set();
   const maxLength = Math.max(
-    arxivPapers.length,
-    semanticScholarPapers.length,
+    ...providerPapers.map((papers) => papers.length),
   );
 
   for (let i = 0; i < maxLength && merged.length < limit; i += 1) {
-    for (const paper of [
-      arxivPapers[i],
-      semanticScholarPapers[i],
-    ]) {
+    for (const papers of providerPapers) {
+      const paper = papers[i];
+
       if (!paper || merged.length >= limit) continue;
 
       const identity = paperIdentity(paper);
@@ -72,9 +71,14 @@ export async function discoverPapers(runId) {
       filters,
       limit,
     }),
+    searchOpenAlex({
+      query: run.question,
+      filters,
+      limit,
+    }),
   ]);
 
-  const [arxivResult, semanticScholarResult] = results;
+  const [arxivResult, semanticScholarResult, openAlexResult] = results;
 
   const arxivPapers =
     arxivResult.status === "fulfilled"
@@ -85,21 +89,49 @@ export async function discoverPapers(runId) {
     semanticScholarResult.status === "fulfilled"
       ? semanticScholarResult.value
       : [];
+  const openAlexPapers =
+    openAlexResult.status === "fulfilled"
+      ? openAlexResult.value
+      : [];
 
   if (
     arxivResult.status === "rejected" &&
-    semanticScholarResult.status === "rejected"
+    semanticScholarResult.status === "rejected" &&
+    openAlexResult.status === "rejected"
   ) {
+    const providerFailures = [
+      ["arXiv", arxivResult.reason],
+      ["Semantic Scholar", semanticScholarResult.reason],
+      ["OpenAlex", openAlexResult.reason],
+    ].map(
+      ([provider, reason]) =>
+        new Error(`${provider} provider failed`, { cause: reason }),
+    );
+    const failureSummary = providerFailures
+      .map((failure) => {
+        const reason = failure.cause;
+        const message =
+          reason instanceof Error ? reason.message : String(reason);
+
+        return `${failure.message}: ${message}`;
+      })
+      .join("; ");
+
     throw new ApiError(
       502,
       "PAPER_DISCOVERY_FAILED",
       "All paper providers failed to return results",
+      {
+        cause: new AggregateError(
+          providerFailures,
+          `Paper discovery providers failed: ${failureSummary}`,
+        ),
+      },
     );
   }
 
   const papers = mergePapers(
-    arxivPapers,
-    semanticScholarPapers,
+    [arxivPapers, semanticScholarPapers, openAlexPapers],
     limit,
   );
 
@@ -124,6 +156,13 @@ export async function discoverPapers(runId) {
           : "failed",
       count: semanticScholarPapers.length,
     },
+    openAlex: {
+      status:
+        openAlexResult.status === "fulfilled"
+          ? "succeeded"
+          : "failed",
+      count: openAlexPapers.length,
+    },
   };
 
   const warnings = [];
@@ -143,6 +182,13 @@ if (arxivResult.status === "rejected") {
   if (semanticScholarResult.status === "rejected") {
     warnings.push({
       provider: "semantic_scholar",
+      message: "This provider could not be searched",
+    });
+  }
+
+  if (openAlexResult.status === "rejected") {
+    warnings.push({
+      provider: "openalex",
       message: "This provider could not be searched",
     });
   }

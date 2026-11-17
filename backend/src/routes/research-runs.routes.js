@@ -4,6 +4,7 @@ import {
   getResearchRun,
   listResearchRuns,
   patchResearchRun,
+  removeResearchRun,
 } from "../controllers/research-runs.controller.js";
 
 import {
@@ -22,6 +23,7 @@ router.post("/", createResearchRun);
 router.get("/", listResearchRuns);
 router.get("/:id", getResearchRun);
 router.patch("/:id", patchResearchRun);
+router.delete("/:id", removeResearchRun);
 router.post("/:id/papers/discover", discoverRunPapers);
 router.get("/:id/papers", getRunPapers);
 router.post("/:id/execute", executeRun);

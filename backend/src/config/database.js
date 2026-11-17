@@ -11,9 +11,10 @@ const connectionString =
 
 export const pool = new Pool({
   connectionString,
-  max: env.NODE_ENV === "test" ? 3 : 10,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: env.NODE_ENV === "test" ? 20_000 : 10_000,
+  max: env.NODE_ENV === "test" ? 5 : 10,
+  idleTimeoutMillis: 10_000,
+  connectionTimeoutMillis: env.NODE_ENV === "test" ? 30_000 : 10_000,
+  keepAlive: true,
   application_name: "sciresearch-backend",
 });
 

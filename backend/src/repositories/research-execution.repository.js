@@ -36,9 +36,14 @@ export async function persistPassages(passages, db = pool) {
     const valuePlaceholders = [];
 
     chunk.forEach((p, idx) => {
-      const base = idx * 6;
+      const base = idx * 7;
+      const embLiteral =
+        Array.isArray(p.embedding) && p.embedding.length > 0
+          ? `[${p.embedding.join(",")}]`
+          : null;
+
       valuePlaceholders.push(
-        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`,
+        `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`,
       );
       values.push(
         p.id,
@@ -47,15 +52,17 @@ export async function persistPassages(passages, db = pool) {
         cleanStr(p.text),
         p.page_number,
         cleanStr(p.section),
+        embLiteral,
       );
     });
 
     const query = `
       INSERT INTO paper_passages (
-        id, paper_id, passage_index, text, page_number, section
+        id, paper_id, passage_index, text, page_number, section, embedding
       )
       VALUES ${valuePlaceholders.join(", ")}
-      ON CONFLICT (id) DO NOTHING
+      ON CONFLICT (id) DO UPDATE SET
+        embedding = COALESCE(EXCLUDED.embedding, paper_passages.embedding)
       RETURNING id, paper_id, passage_index, page_number, section
     `;
 

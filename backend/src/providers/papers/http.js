@@ -1,12 +1,18 @@
+const DEFAULT_USER_AGENT =
+  "SciResearchSystem/1.0 (academic-multi-agent-research; mailto:contact@sciresearch.org)";
+
 export async function fetchProviderResponse(
   url,
-  { provider, headers = {}, timeoutMs = 10_000 } = {},
+  { provider, headers = {}, timeoutMs = 20_000 } = {},
 ) {
   let response;
 
   try {
     response = await fetch(url, {
-      headers,
+      headers: {
+        "User-Agent": DEFAULT_USER_AGENT,
+        ...headers,
+      },
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {

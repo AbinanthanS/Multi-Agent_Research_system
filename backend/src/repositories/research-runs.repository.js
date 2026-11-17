@@ -118,3 +118,14 @@ export async function updateResearchRun(id, updates, expectedVersion) {
 
   return rows[0] ?? null;
 }
+
+export async function deleteResearchRun(id) {
+  const { rows } = await pool.query(
+    `DELETE FROM research_runs
+     WHERE id = $1
+     RETURNING id`,
+    [id],
+  );
+
+  return rows[0] ?? null;
+}

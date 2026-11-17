@@ -65,3 +65,13 @@ export async function patchResearchRun(req, res) {
     data: run,
   });
 }
+
+export async function removeResearchRun(req, res) {
+  const id = parseOrThrow(researchRunIdSchema, req.params.id);
+  const result = await service.deleteRun(id);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+}

@@ -5,6 +5,7 @@ import { searchArxiv } from "../../src/providers/papers/arxiv.js";
 import {
   searchSemanticScholar,
 } from "../../src/providers/papers/semantic-scholar.js";
+import { searchOpenAlex } from "../../src/providers/papers/openalex.js";
 
 test("Semantic Scholar results are normalized", async (t) => {
   t.mock.method(globalThis, "fetch", async (url, options) => {
@@ -120,6 +121,71 @@ test("arXiv results are normalized and filtered by year", async (t) => {
     papers[0].pdf_url,
     "https://arxiv.org/pdf/2401.12345v2",
   );
+});
+
+test("OpenAlex results are normalized and filtered by year", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url) => {
+    const requestUrl = new URL(String(url));
+
+    assert.equal(requestUrl.hostname, "api.openalex.org");
+    assert.equal(requestUrl.searchParams.get("search"), "research testing");
+    assert.equal(
+      requestUrl.searchParams.get("filter"),
+      "publication_year:2020-2025",
+    );
+
+    return new Response(
+      JSON.stringify({
+        results: [
+          {
+            id: "https://openalex.org/W123456789",
+            doi: "https://doi.org/10.1234/example",
+            display_name: "  Example OpenAlex Paper  ",
+            publication_year: 2024,
+            abstract_inverted_index: {
+              "A": [0],
+              "test": [1],
+              "abstract.": [2],
+            },
+            authorships: [
+              { author: { display_name: "Ada Lovelace" } },
+            ],
+            primary_location: {
+              landing_page_url: "https://example.org/paper",
+              pdf_url: "https://example.org/paper.pdf",
+            },
+            cited_by_count: 12,
+            type: "article",
+            publication_date: "2024-01-10",
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  });
+
+  const papers = await searchOpenAlex({
+    query: "research",
+    filters: {
+      domain: "testing",
+      yearFrom: 2020,
+      yearTo: 2025,
+      maxPapers: 5,
+    },
+  });
+
+  assert.equal(papers.length, 1);
+  assert.equal(papers[0].source, "openalex");
+  assert.equal(papers[0].source_id, "W123456789");
+  assert.equal(papers[0].title, "Example OpenAlex Paper");
+  assert.equal(papers[0].published_year, 2024);
+  assert.equal(papers[0].abstract, "A test abstract.");
+  assert.deepEqual(papers[0].authors, ["Ada Lovelace"]);
+  assert.equal(papers[0].doi, "10.1234/example");
+  assert.equal(papers[0].pdf_url, "https://example.org/paper.pdf");
 });
 
 test("provider HTTP failures are surfaced", async (t) => {

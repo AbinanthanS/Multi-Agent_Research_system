@@ -122,3 +122,17 @@ export async function updateRun(id, updates, expectedVersion) {
 
   return updated;
 }
+
+export async function deleteRun(id) {
+  const deleted = await repository.deleteResearchRun(id);
+
+  if (!deleted) {
+    throw new ApiError(
+      404,
+      "RESEARCH_RUN_NOT_FOUND",
+      "Research run not found",
+    );
+  }
+
+  return { id: deleted.id, deleted: true };
+}

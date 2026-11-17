@@ -8,6 +8,7 @@ import {
 const ALLOWED_SOURCES = new Set([
   "arxiv",
   "semantic_scholar",
+  "openalex",
 ]);
 
 function validatePaper(paper) {

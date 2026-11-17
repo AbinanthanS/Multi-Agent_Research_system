@@ -29,7 +29,7 @@ A scientific literature research assistant that discovers academic papers, extra
                           Embeddings & Retrieval
 ```
 
-- **Backend (`backend/`):** Node.js 24 + Express 5. Handles public REST APIs, paper discovery adapters (arXiv, Semantic Scholar), transaction management, optimistic concurrency control, and relational schema migrations.
+- **Backend (`backend/`):** Node.js 24 + Express 5. Handles public REST APIs, paper discovery adapters (arXiv, Semantic Scholar, OpenAlex), transaction management, optimistic concurrency control, and relational schema migrations.
 - **AI Service (`ai-service/`):** Python 3.11 + FastAPI. Handles PDF download/extraction (PyMuPDF), document chunking, embeddings, pgvector semantic retrieval, and multi-agent workflow orchestration (LangGraph).
 - **Database:** PostgreSQL on Neon with `pgvector` for passage embeddings and full-text search.
 

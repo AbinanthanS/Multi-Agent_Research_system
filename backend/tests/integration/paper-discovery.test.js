@@ -19,6 +19,7 @@ test("paper discovery API handles successful and failed providers", async (t) =>
   const runIds = [];
   const arxivId = `discovery-${randomUUID()}`;
   const semanticId = randomUUID();
+  const openAlexId = `W${randomUUID().replaceAll("-", "")}`;
   const server = app.listen(0);
 
   let providerMode = "success";
@@ -63,6 +64,20 @@ test("paper discovery API handles successful and failed providers", async (t) =>
       },
     ],
   };
+  const openAlexJson = {
+    results: [
+      {
+        id: `https://openalex.org/${openAlexId}`,
+        display_name: "Testing Literature Discovery with OpenAlex",
+        publication_year: 2023,
+        abstract_inverted_index: null,
+        authorships: [],
+        primary_location: null,
+        open_access: null,
+        cited_by_count: 0,
+      },
+    ],
+  };
 
   await new Promise((resolve, reject) => {
     server.once("listening", resolve);
@@ -86,6 +101,15 @@ test("paper discovery API handles successful and failed providers", async (t) =>
     }
 
     if (providerMode === "all-fail") {
+      return new Response("Provider unavailable", {
+        status: 503,
+      });
+    }
+
+    if (
+      providerMode === "openalex-fallback" &&
+      url.hostname !== "api.openalex.org"
+    ) {
       return new Response("Provider unavailable", {
         status: 503,
       });
@@ -118,6 +142,13 @@ test("paper discovery API handles successful and failed providers", async (t) =>
       });
     }
 
+    if (url.hostname === "api.openalex.org") {
+      return new Response(JSON.stringify(openAlexJson), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     throw new Error(`Unexpected external request: ${url.hostname}`);
   });
 
@@ -141,8 +172,12 @@ test("paper discovery API handles successful and failed providers", async (t) =>
             source = 'semantic_scholar'
             AND source_id = $2
           )
+          OR (
+            source = 'openalex'
+            AND source_id = $3
+          )
         `,
-        [arxivId, semanticId],
+        [arxivId, semanticId, openAlexId],
       );
     } finally {
       try {
@@ -177,7 +212,7 @@ test("paper discovery API handles successful and failed providers", async (t) =>
   const discoveryUrl =
     `${baseUrl}/${runId}/papers/discover`;
 
-  // 1. Both providers succeed.
+  // 1. All providers succeed.
   const successResponse = await fetch(discoveryUrl, {
     method: "POST",
   });
@@ -188,15 +223,16 @@ test("paper discovery API handles successful and failed providers", async (t) =>
   const success = successBody.data;
 
   assert.equal(success.runId, runId);
-  assert.equal(success.discoveredCount, 2);
-  assert.equal(success.savedCount, 2);
+  assert.equal(success.discoveredCount, 3);
+  assert.equal(success.savedCount, 3);
   assert.equal(success.providers.arxiv.status, "succeeded");
   assert.equal(
     success.providers.semanticScholar.status,
     "succeeded",
   );
+  assert.equal(success.providers.openAlex.status, "succeeded");
   assert.deepEqual(success.warnings, []);
-  assert.equal(success.papers.length, 2);
+  assert.equal(success.papers.length, 3);
 
   // 2. One provider fails; successful results are still saved.
   providerMode = "partial-failure";
@@ -216,9 +252,28 @@ test("paper discovery API handles successful and failed providers", async (t) =>
     "succeeded",
   );
   assert.equal(partial.warnings.length, 1);
-  assert.equal(partial.papers.length, 1);
+  assert.equal(partial.providers.openAlex.status, "succeeded");
+  assert.equal(partial.papers.length, 2);
 
-  // 3. Both providers fail.
+  // 3. OpenAlex still returns results when both original providers fail.
+  providerMode = "openalex-fallback";
+
+  const fallbackResponse = await fetch(discoveryUrl, {
+    method: "POST",
+  });
+
+  assert.equal(fallbackResponse.status, 200);
+
+  const fallbackBody = await fallbackResponse.json();
+  const fallback = fallbackBody.data;
+
+  assert.equal(fallback.providers.arxiv.status, "failed");
+  assert.equal(fallback.providers.semanticScholar.status, "failed");
+  assert.equal(fallback.providers.openAlex.status, "succeeded");
+  assert.equal(fallback.papers.length, 1);
+  assert.equal(fallback.papers[0].source, "openalex");
+
+  // 4. All providers fail.
   providerMode = "all-fail";
 
   const failedResponse = await fetch(discoveryUrl, {
@@ -234,7 +289,7 @@ test("paper discovery API handles successful and failed providers", async (t) =>
     "PAPER_DISCOVERY_FAILED",
   );
 
-  // 4. An invalid research-run ID is rejected.
+  // 5. An invalid research-run ID is rejected.
   const invalidResponse = await fetch(
     `${baseUrl}/not-a-uuid/papers/discover`,
     { method: "POST" },
