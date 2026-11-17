@@ -50,24 +50,34 @@ export function PipelineStepper({
 
   return (
     <div>
-      <p className="mb-3 text-xs text-fg-muted">
-        Workflow illustration. The execute endpoint does not stream per-agent progress, so stages
-        are not shown as live backend events.
-      </p>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs text-fg-muted">
+          Multi-agent execution graph
+        </p>
+        {visual === "active" && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 border border-accent/30 px-2.5 py-0.5 text-[11px] font-medium text-accent">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+            </span>
+            Agents working…
+          </span>
+        )}
+      </div>
       <ol className="hidden gap-2 md:grid md:grid-cols-5">
         {PIPELINE_STAGES.map((stage, index) => (
           <li
             key={stage.id}
             className={cn(
-              "rounded-xl border p-3",
-              visual === "completed" && "border-success/30 bg-success/5",
-              visual === "failed" && "border-error/30 bg-error/5",
-              visual === "active" && "border-info/30 bg-info/5",
-              visual === "pending" && "border-line bg-elevated",
+              "rounded-xl border p-3.5 transition-all duration-200",
+              visual === "completed" && "border-success/30 bg-success/5 shadow-[0_0_15px_-3px_rgba(16,185,129,0.08)]",
+              visual === "failed" && "border-error/30 bg-error/5 shadow-[0_0_15px_-3px_rgba(244,63,94,0.08)]",
+              visual === "active" && "border-accent/40 bg-accent/5 shadow-[0_0_20px_-3px_rgba(139,92,246,0.15)] ring-1 ring-accent/30",
+              visual === "pending" && "border-line bg-elevated/70",
             )}
           >
             <div className="mb-2 flex items-center justify-between">
-              <span className="font-mono text-[10px] text-fg-muted">0{index + 1}</span>
+              <span className="font-mono text-[10px] font-medium text-fg-muted">0{index + 1}</span>
               <StageIcon visual={visual} />
             </div>
             <p className="text-xs font-medium text-fg">{stage.title}</p>
@@ -98,6 +108,12 @@ export function PipelineStepper({
 function StageIcon({ visual }: { visual: StageVisual }) {
   if (visual === "completed") return <Check size={14} className="text-success" />;
   if (visual === "failed") return <X size={14} className="text-error" />;
-  if (visual === "active") return <Loader2 size={14} className="animate-spin text-info" />;
-  return <Circle size={14} className="text-fg-muted" />;
+  if (visual === "active") {
+    return (
+      <div className="relative flex items-center justify-center">
+        <Loader2 size={14} className="animate-spin text-accent" />
+      </div>
+    );
+  }
+  return <Circle size={14} className="text-fg-muted/60" />;
 }

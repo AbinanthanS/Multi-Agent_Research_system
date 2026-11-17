@@ -2,9 +2,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
+import { Sparkles, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useCreateRun } from "../hooks/useResearch";
 import { useToast } from "../hooks/useToast";
 import { PageHeader } from "../components/ui/PageHeader";
+import { Button } from "../components/ui/button";
 import { ApiClientError } from "../api/client";
 
 const schema = z.object({
@@ -65,35 +67,42 @@ export function NewResearchPage() {
         title="Frame a research question"
         description="The system will search academic literature, extract evidence-grounded claims, verify support classifications, and synthesize a review report."
       />
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+
+      <form onSubmit={form.handleSubmit(onSubmit)} className="specular-card mt-6 space-y-6 rounded-2xl bg-elevated/75 p-6 backdrop-blur-md sm:p-8">
         <div>
-          <label htmlFor="question" className="mb-2 block text-sm text-fg-secondary">
+          <label htmlFor="question" className="mb-2 block text-sm font-medium text-fg">
             Research question
           </label>
           <textarea
             id="question"
-            rows={6}
+            rows={5}
             {...form.register("question")}
-            className="w-full rounded-xl border border-line bg-elevated p-4 text-base leading-relaxed text-fg placeholder:text-fg-muted"
+            className="w-full rounded-xl border border-line/80 bg-surface/70 p-4 text-base leading-relaxed text-fg placeholder:text-fg-muted focus:border-accent/40 focus:ring-1 focus:ring-accent/30 focus:outline-none transition-all"
             placeholder="What should this investigation answer?"
           />
           <div className="mt-2 flex justify-between text-xs text-fg-muted">
-            <span>{form.formState.errors.question?.message}</span>
-            <span className="font-mono">{question.length}/2000</span>
+            <span className="text-error">{form.formState.errors.question?.message}</span>
+            <span className="font-mono tabular-nums">{question.length}/2000</span>
           </div>
         </div>
 
         <div>
-          <p className="mb-2 text-xs uppercase tracking-[0.1em] text-fg-muted">Example questions</p>
+          <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-fg-muted font-mono">
+            Example prompts
+          </p>
           <div className="flex flex-col gap-2">
             {EXAMPLES.map((example) => (
               <button
                 key={example}
                 type="button"
                 onClick={() => form.setValue("question", example, { shouldValidate: true })}
-                className="rounded-lg border border-line bg-surface px-3 py-2 text-left text-sm text-fg-secondary hover:border-accent/40 hover:text-fg"
+                className="group flex items-center justify-between rounded-xl border border-line/80 bg-surface/60 px-4 py-2.5 text-left text-sm text-fg-secondary transition-all hover:border-accent/40 hover:bg-surface hover:text-fg"
               >
-                {example}
+                <span className="flex items-center gap-2">
+                  <Sparkles size={13} className="text-accent opacity-70 group-hover:opacity-100" />
+                  {example}
+                </span>
+                <ArrowRight size={13} className="shrink-0 text-fg-muted opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
             ))}
           </div>
@@ -101,14 +110,14 @@ export function NewResearchPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label htmlFor="domain" className="mb-2 block text-sm text-fg-secondary">
-              Research domain <span className="text-fg-muted">(optional)</span>
+            <label htmlFor="domain" className="mb-2 block text-sm font-medium text-fg">
+              Research domain <span className="text-xs font-normal text-fg-muted">(optional)</span>
             </label>
             <input
               id="domain"
               list="domain-options"
               {...form.register("domain")}
-              className="h-10 w-full rounded-lg border border-line bg-elevated px-3 text-sm"
+              className="h-10 w-full rounded-lg border border-line/80 bg-surface/70 px-3 text-sm text-fg placeholder:text-fg-muted focus:border-accent/40 focus:ring-1 focus:ring-accent/30 focus:outline-none transition-all"
               placeholder="e.g. Computational Chemistry"
             />
             <datalist id="domain-options">
@@ -118,7 +127,7 @@ export function NewResearchPage() {
             </datalist>
           </div>
           <div>
-            <label htmlFor="maxPapers" className="mb-2 block text-sm text-fg-secondary">
+            <label htmlFor="maxPapers" className="mb-2 block text-sm font-medium text-fg">
               Maximum papers
             </label>
             <input
@@ -127,36 +136,45 @@ export function NewResearchPage() {
               min={1}
               max={100}
               {...form.register("maxPapers", { valueAsNumber: true })}
-              className="h-10 w-full rounded-lg border border-line bg-elevated px-3 text-sm"
+              className="h-10 w-full rounded-lg border border-line/80 bg-surface/70 px-3 text-sm text-fg focus:border-accent/40 focus:ring-1 focus:ring-accent/30 focus:outline-none transition-all"
             />
-            <p className="mt-1 text-xs text-fg-muted">Discovery is capped at this count (1–100).</p>
+            <p className="mt-1.5 text-xs text-fg-muted font-mono">Discovery limit: 1–100 papers</p>
           </div>
         </div>
 
-        <div className="rounded-xl border border-line bg-elevated p-4 text-sm text-fg-secondary">
-          <p className="font-medium text-fg">Expected outputs</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5">
-            <li>Candidate papers from arXiv and Semantic Scholar</li>
-            <li>Claims with supporting, contradicting, or contextual passages</li>
-            <li>A markdown scientific review you can copy, download, or print</li>
+        <div className="rounded-xl border border-line/70 bg-surface/40 p-4 text-sm text-fg-secondary">
+          <p className="font-medium text-fg">Automated multi-agent outputs</p>
+          <ul className="mt-2.5 space-y-1.5 pl-0 text-xs text-fg-muted">
+            <li className="flex items-center gap-2">
+              <CheckCircle2 size={13} className="text-success" />
+              <span>Multi-provider discovery across arXiv, Semantic Scholar, and OpenAlex</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <CheckCircle2 size={13} className="text-success" />
+              <span>Semantic RAG extraction with supporting, contradicting, or contextual passage tags</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <CheckCircle2 size={13} className="text-success" />
+              <span>Synthesized scientific review with citations and claim confidence matrix</span>
+            </li>
           </ul>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button
+        <div className="flex justify-end gap-2 pt-2">
+          <Button
             type="button"
+            variant="outline"
             onClick={() => form.reset()}
-            className="h-10 rounded-lg border border-line px-4 text-sm text-fg-secondary"
           >
             Clear
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             disabled={create.isPending}
-            className="h-10 rounded-lg bg-accent-strong px-4 text-sm text-white disabled:opacity-50"
+            className="shadow-sm"
           >
             {create.isPending ? "Creating…" : "Create research run"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

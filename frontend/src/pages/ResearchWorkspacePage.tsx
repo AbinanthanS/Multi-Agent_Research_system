@@ -1,8 +1,9 @@
-import { Copy, Play, RefreshCw, Search } from "lucide-react";
+import { Copy, Play, RefreshCw, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   useClaims,
+  useDeleteRun,
   useDiscoverPapers,
   useExecuteRun,
   usePapers,
@@ -21,6 +22,7 @@ import { EvidenceDrawer } from "../components/research/EvidenceDrawer";
 import { ReportReader } from "../components/research/ReportReader";
 import { SearchInput } from "../components/ui/SearchInput";
 import { EmptyState } from "../components/ui/EmptyState";
+import { Button } from "../components/ui/button";
 import { formatDateTime, formatDuration } from "../lib/format";
 import { ApiClientError } from "../api/client";
 import type { EvidencePassage, PaperDiscoveryResult, ResearchPaper } from "../types/domain";
@@ -37,6 +39,7 @@ type TabId = (typeof TABS)[number]["id"];
 
 export function ResearchWorkspacePage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const tab = (TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : "overview") as TabId;
   const runQuery = useResearchRun(id);
@@ -45,14 +48,16 @@ export function ResearchWorkspacePage() {
   const reportQuery = useReport(id, tab === "report");
   const discover = useDiscoverPapers(id ?? "");
   const execute = useExecuteRun(id ?? "");
+  const deleteRun = useDeleteRun();
   const { toast } = useToast();
   const [confirmExecute, setConfirmExecute] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [evidence, setEvidence] = useState<EvidencePassage | null>(null);
   const [paperQuery, setPaperQuery] = useState("");
   const [yearFilter, setYearFilter] = useState("");
 
   const run = runQuery.data;
-  const papers = papersQuery.data?.papers ?? [];
+  const papers = useMemo(() => papersQuery.data?.papers ?? [], [papersQuery.data?.papers]);
   const duration = formatDuration(run?.started_at, run?.completed_at);
   const canDiscover = run && run.status !== "running" && run.status !== "completed";
   const canExecute =
@@ -83,7 +88,10 @@ export function ResearchWorkspacePage() {
       const result = await discover.mutateAsync(run.filters?.maxPapers);
       const arxiv = result.providers.arxiv;
       const semantic = result.providers.semanticScholar;
-      const failed = [arxiv, semantic].some((p) => p && p.status === "failed");
+      const openAlex = result.providers.openAlex;
+      const failed = [arxiv, semantic, openAlex].some(
+        (provider) => provider && provider.status === "failed",
+      );
       toast(
         failed
           ? "Discovery finished with provider warnings. Check the literature tab."
@@ -131,9 +139,9 @@ export function ResearchWorkspacePage() {
       <Link to="/" className="mb-4 inline-block text-sm text-fg-muted hover:text-fg">
         ← Overview
       </Link>
-      <header className="mb-6 rounded-2xl border border-line bg-elevated p-6">
+      <header className="specular-card mb-6 rounded-2xl bg-elevated/85 p-6 backdrop-blur-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1 className="max-w-3xl text-xl leading-snug font-medium tracking-tight text-fg">
+          <h1 className="max-w-3xl text-xl leading-snug font-semibold tracking-tight text-fg">
             {run.question}
           </h1>
           <StatusBadge status={run.status} />
@@ -162,45 +170,58 @@ export function ResearchWorkspacePage() {
         ) : null}
         <div className="mt-5 flex flex-wrap gap-2">
           {canDiscover ? (
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => void onDiscover()}
               disabled={discover.isPending || execute.isPending}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-line px-3 text-sm disabled:opacity-50"
+              className="gap-2"
             >
               <Search size={14} />
               {discover.isPending ? "Discovering papers…" : "Discover papers"}
-            </button>
+            </Button>
           ) : null}
           {canExecute ? (
-            <button
-              type="button"
+            <Button
+              variant="default"
+              size="sm"
               onClick={() => setConfirmExecute(true)}
               disabled={execute.isPending}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent-strong px-3 text-sm text-white disabled:opacity-50"
+              className="gap-2 shadow-sm"
             >
               <Play size={14} />
               {execute.isPending ? "Executing pipeline…" : run.status === "failed" ? "Retry pipeline" : "Execute pipeline"}
-            </button>
+            </Button>
           ) : null}
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => void runQuery.refetch()}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-line px-3 text-sm text-fg-secondary"
+            className="gap-2"
           >
             <RefreshCw size={14} />
             Refresh
-          </button>
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setConfirmDelete(true)}
+            disabled={run.status === "running"}
+            className="gap-2"
+          >
+            <Trash2 size={14} />
+            Delete run
+          </Button>
         </div>
       </header>
 
-      <div className="mb-6 flex gap-1 overflow-x-auto rounded-lg border border-line bg-elevated p-1">
+      <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-line bg-elevated/70 p-1 backdrop-blur-sm">
         {TABS.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
-            className={`shrink-0 rounded-md px-3 py-1.5 text-sm ${tab === item.id ? "bg-surface text-fg" : "text-fg-secondary"}`}
+            className={`shrink-0 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-all duration-150 ${tab === item.id ? "bg-surface text-fg shadow-sm" : "text-fg-secondary hover:text-fg hover:bg-surface/50"}`}
           >
             {item.label}
           </button>
@@ -294,6 +315,24 @@ export function ResearchWorkspacePage() {
         onClose={() => setConfirmExecute(false)}
         onConfirm={() => void onExecute()}
       />
+      <ConfirmationDialog
+        open={confirmDelete}
+        title="Delete this research run?"
+        description="This will permanently delete this research run and all associated discovered papers, extracted claims, evidence, and synthesized reports. This action cannot be undone."
+        confirmLabel="Delete"
+        loading={deleteRun.isPending}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          if (!run) return;
+          try {
+            await deleteRun.mutateAsync(run.id);
+            toast("Research run deleted successfully.", "success");
+            navigate("/");
+          } catch (err) {
+            toast(err instanceof Error ? err.message : "Failed to delete run.", "error");
+          }
+        }}
+      />
     </div>
   );
 }
@@ -341,6 +380,10 @@ function DiscoverySummary({ result }: { result: PaperDiscoveryResult }) {
         <p>
           Semantic Scholar: {result.providers.semanticScholar?.status ?? "not reported"}
           {result.providers.semanticScholar ? ` · ${result.providers.semanticScholar.count}` : ""}
+        </p>
+        <p>
+          OpenAlex: {result.providers.openAlex?.status ?? "not reported"}
+          {result.providers.openAlex ? ` · ${result.providers.openAlex.count}` : ""}
         </p>
       </div>
       {result.warnings?.length ? (
@@ -398,7 +441,7 @@ function LiteratureTab({
     <div>
       {discovery ? <DiscoverySummary result={discovery} /> : null}
       {discovering ? (
-        <p className="mb-4 text-sm text-info">Searching arXiv and Semantic Scholar. Duplicate discovery is disabled until this request finishes.</p>
+        <p className="mb-4 text-sm text-info">Searching arXiv, Semantic Scholar, and OpenAlex. Duplicate discovery is disabled until this request finishes.</p>
       ) : null}
       {total === 0 ? (
         <EmptyState

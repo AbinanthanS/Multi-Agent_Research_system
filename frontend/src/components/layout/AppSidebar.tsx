@@ -54,7 +54,7 @@ export function AppSidebar({
         )}
       >
         <div className={cn("flex items-center gap-3 px-4 py-5", collapsed && "justify-center px-2")}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-strong text-sm font-semibold text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-accent-strong text-sm font-semibold text-white shadow-[0_0_15px_-3px_rgba(139,92,246,0.35)]">
             RI
           </div>
           {!collapsed ? (
@@ -95,9 +95,9 @@ export function AppSidebar({
               title={item.label}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-fg-secondary hover:bg-elevated hover:text-fg",
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-fg-secondary hover:bg-elevated hover:text-fg transition-colors duration-150",
                   collapsed && "justify-center px-2",
-                  isActive && "bg-elevated text-fg",
+                  isActive && "bg-surface/90 text-fg font-medium border border-line/70 shadow-sm",
                 )
               }
             >

@@ -1,7 +1,15 @@
-import { Calendar, Clock3, Ellipsis, Layers } from "lucide-react";
+import { Calendar, Clock3, Ellipsis, Layers, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
 import { StatusBadge } from "../ui/StatusBadge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { useDeleteRun } from "../../hooks/useResearch";
+import { useToast } from "../../hooks/useToast";
 import {
   formatDateTime,
   formatDuration,
@@ -11,25 +19,15 @@ import type { ResearchRun } from "../../types/domain";
 
 export function ResearchRunCard({ run }: { run: ResearchRun }) {
   const navigate = useNavigate();
-  const [menu, setMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+  const deleteRun = useDeleteRun();
   const duration = formatDuration(run.started_at, run.completed_at);
   const domain = run.filters?.domain;
   const maxPapers = run.filters?.maxPapers;
 
-  useEffect(() => {
-    function onDoc(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenu(false);
-      }
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-
   return (
     <article
-      className="group relative cursor-pointer rounded-xl border border-line bg-elevated p-5 transition-colors hover:border-accent/35"
+      className="group specular-card relative cursor-pointer rounded-xl bg-elevated/80 p-5.5 backdrop-blur-sm"
       onClick={() => navigate(`/research/${run.id}`)}
       onKeyDown={(e) => {
         if (e.key === "Enter") navigate(`/research/${run.id}`);
@@ -40,54 +38,60 @@ export function ResearchRunCard({ run }: { run: ResearchRun }) {
     >
       <div className="mb-3 flex items-start justify-between gap-3">
         <StatusBadge status={run.status} />
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            className="rounded-md p-1 text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-surface hover:text-fg focus:opacity-100"
-            aria-label="Run actions"
-            onClick={(e) => {
-              e.stopPropagation();
-              setMenu((v) => !v);
-            }}
-          >
-            <Ellipsis size={16} />
-          </button>
-          {menu ? (
-            <div className="absolute right-0 z-10 mt-1 w-44 rounded-lg border border-line bg-app p-1 shadow-xl">
+        <div onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="block w-full rounded-md px-3 py-1.5 text-left text-sm text-fg-secondary hover:bg-surface"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/research/${run.id}`);
-                }}
+                className="rounded-md p-1 text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-surface hover:text-fg focus:opacity-100 transition-opacity"
+                aria-label="Run actions"
               >
-                Open workspace
+                <Ellipsis size={16} />
               </button>
-              <button
-                type="button"
-                className="block w-full rounded-md px-3 py-1.5 text-left text-sm text-fg-secondary hover:bg-surface"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/research/${run.id}?tab=literature`);
-                }}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => navigate(`/research/${run.id}`)}>
+                Open workspace
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => navigate(`/research/${run.id}?tab=literature`)}
               >
                 View literature
-              </button>
+              </DropdownMenuItem>
               {run.status === "completed" ? (
-                <button
-                  type="button"
-                  className="block w-full rounded-md px-3 py-1.5 text-left text-sm text-fg-secondary hover:bg-surface"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/research/${run.id}?tab=report`);
-                  }}
+                <DropdownMenuItem
+                  onClick={() => navigate(`/research/${run.id}?tab=report`)}
                 >
                   Open report
-                </button>
+                </DropdownMenuItem>
               ) : null}
-            </div>
-          ) : null}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={deleteRun.isPending}
+                className="text-error focus:bg-error/10 focus:text-error"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Are you sure you want to delete this research run?"
+                    )
+                  ) {
+                    deleteRun.mutate(run.id, {
+                      onSuccess: () =>
+                        toast("Research run deleted.", "success"),
+                      onError: (err) =>
+                        toast(
+                          err instanceof Error ? err.message : "Delete failed.",
+                          "error"
+                        ),
+                    });
+                  }
+                }}
+              >
+                <Trash2 size={13} className="mr-1" />
+                Delete run
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <h3 className="line-clamp-3 text-[15px] leading-snug font-medium text-fg">

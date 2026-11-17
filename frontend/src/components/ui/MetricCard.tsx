@@ -12,15 +12,19 @@ export function MetricCard({
   icon: LucideIcon;
 }) {
   return (
-    <div className="rounded-xl border border-line bg-elevated p-4">
+    <div className="specular-card rounded-xl bg-elevated/90 p-4.5 backdrop-blur-sm">
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-fg-muted">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-fg-muted font-mono">
           {label}
         </p>
-        <Icon size={15} className="text-accent" />
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/10 border border-accent/20 text-accent">
+          <Icon size={14} />
+        </div>
       </div>
-      <p className="font-mono text-2xl font-medium tracking-tight text-fg">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-fg-muted">{hint}</p> : null}
+      <p className="font-mono text-2xl font-semibold tracking-tight text-fg tabular-nums">
+        {value}
+      </p>
+      {hint ? <p className="mt-1.5 text-xs text-fg-muted">{hint}</p> : null}
     </div>
   );
 }

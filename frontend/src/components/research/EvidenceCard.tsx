@@ -25,7 +25,7 @@ export function EvidenceCard({
   const evidence = Array.isArray(claim.evidence) ? claim.evidence : [];
 
   return (
-    <article className="rounded-xl border border-line bg-elevated p-5">
+    <article className="specular-card rounded-xl bg-elevated/85 p-5 backdrop-blur-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {claim.claim_type ? (
           <span className="rounded-md border border-line bg-surface px-2 py-0.5 text-[11px] text-fg-secondary">
