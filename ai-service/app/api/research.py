@@ -28,7 +28,9 @@ logger = logging.getLogger("ai_service.api.research")
 router = APIRouter(prefix="/api/v1/research", tags=["research"])
 
 
-async def _process_single_paper(paper_dict: dict, download_pdf: bool = True) -> list[dict]:
+async def _process_single_paper(
+    paper_dict: dict, download_pdf: bool = True
+) -> list[dict]:
     """Download PDF if available and permitted, otherwise chunk abstract."""
     paper_id = paper_dict["id"]
     pdf_url = paper_dict.get("pdf_url")
@@ -100,15 +102,15 @@ async def execute_research(payload: ResearchExecuteRequest) -> ResearchExecuteRe
 
     # 3. Invoke LangGraph multi-agent research pipeline
     initial_state = {
-        "question":          payload.question,
-        "run_id":            payload.run_id,   # passed to extractor for vector search
-        "papers":            papers_data,
-        "passages":          all_passages,
-        "sub_queries":       [],
-        "claims":            [],
-        "claim_evidence":    [],
-        "report_title":      "",
-        "markdown_content":  "",
+        "question": payload.question,
+        "run_id": payload.run_id,  # passed to extractor for vector search
+        "papers": papers_data,
+        "passages": all_passages,
+        "sub_queries": [],
+        "claims": [],
+        "claim_evidence": [],
+        "report_title": "",
+        "markdown_content": "",
         "structured_content": {},
     }
 

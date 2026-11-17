@@ -14,22 +14,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 
 import app.core.network  # noqa: F401 - ensure IPv4 precedence on Windows
 from app.core.config import get_settings
 
 logger = logging.getLogger("ai_service.embedding")
 
-_TASK_TYPE_DOC   = "RETRIEVAL_DOCUMENT"
+_TASK_TYPE_DOC = "RETRIEVAL_DOCUMENT"
 _TASK_TYPE_QUERY = "RETRIEVAL_QUERY"
-_BATCH_SIZE = 50   # safe concurrent batch size
+_BATCH_SIZE = 50  # safe concurrent batch size
 
 
 def _get_client():
     """Lazy import of the new google-genai SDK client. Returns None if unavailable."""
     try:
         from google import genai  # type: ignore
+
         settings = get_settings()
         return genai.Client(api_key=settings.GEMINI_API_KEY)
     except Exception as exc:
@@ -40,11 +40,11 @@ def _get_client():
 class EmbeddingService:
     """Singleton service for generating Gemini text embeddings."""
 
-    _instance: "EmbeddingService | None" = None
+    _instance: EmbeddingService | None = None
     _ready: bool = False
     _quota_exhausted: bool = False
 
-    def __new__(cls) -> "EmbeddingService":
+    def __new__(cls) -> EmbeddingService:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -62,6 +62,7 @@ class EmbeddingService:
             return False
         try:
             from google import genai  # noqa: F401
+
             return True
         except ImportError:
             logger.warning("google-genai not installed — embeddings disabled.")
@@ -84,7 +85,7 @@ class EmbeddingService:
                 output_dimensionality=768,
                 task_type=task_type,
             )
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 None,
                 lambda: client.models.embed_content(

@@ -1,11 +1,12 @@
 """Network utilities for cross-platform socket connection reliability."""
 
-import socket
 import logging
+import socket
 
 logger = logging.getLogger("ai_service.network")
 
 _patched = False
+
 
 def configure_ipv4_preference():
     """Ensure IPv4 addresses take priority over IPv6 to prevent TCP SYN timeouts on Windows networks."""
@@ -28,6 +29,7 @@ def configure_ipv4_preference():
         logger.debug("IPv4 connection preference configured successfully.")
     except Exception as exc:
         logger.warning("Could not configure IPv4 preference: %s", exc)
+
 
 # Auto-apply on import
 configure_ipv4_preference()

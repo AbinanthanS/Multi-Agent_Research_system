@@ -2,9 +2,10 @@
 Quick diagnostic: call the AI service directly to test the optimized pipeline.
 Uses the 5-paper cancer genomics run (b575cdd8).
 """
+
 import asyncio
+
 import httpx
-import json
 
 RUN_ID = "b575cdd8-eea1-49e0-acc4-4348af6d11bb"
 BACKEND_URL = "http://localhost:5000"
@@ -49,24 +50,33 @@ async def main():
         }
 
         import time
+
         t0 = time.time()
         try:
-            ai_resp = await client.post(f"{AI_URL}/api/v1/research/execute", json=payload)
+            ai_resp = await client.post(
+                f"{AI_URL}/api/v1/research/execute", json=payload
+            )
             elapsed = time.time() - t0
-            print(f"  AI service responded in {elapsed:.1f}s with status {ai_resp.status_code}")
+            print(
+                f"  AI service responded in {elapsed:.1f}s with status {ai_resp.status_code}"
+            )
 
             if ai_resp.status_code == 200:
                 result = ai_resp.json()
                 passages = result.get("passages", [])
                 claims = result.get("claims", [])
                 report = result.get("report", {})
-                print(f"\n[SUCCESS]")
+                print("\n[SUCCESS]")
                 print(f"  Passages generated: {len(passages)}")
                 print(f"  Claims extracted:   {len(claims)}")
                 print(f"  Report title:       {report.get('title', '(none)')}")
-                print(f"  Report length:      {len(report.get('markdown_content', ''))} chars")
+                print(
+                    f"  Report length:      {len(report.get('markdown_content', ''))} chars"
+                )
                 if claims:
-                    print(f"\n  First claim ({claims[0].get('claim_type', '?')}): {claims[0].get('claim_text', '')[:100]}...")
+                    print(
+                        f"\n  First claim ({claims[0].get('claim_type', '?')}): {claims[0].get('claim_text', '')[:100]}..."
+                    )
                 if report.get("markdown_content"):
                     print(f"\n  Report preview:\n{report['markdown_content'][:400]}...")
             else:

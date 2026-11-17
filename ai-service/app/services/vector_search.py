@@ -99,17 +99,15 @@ async def _pgvector_search(
 
     results = [
         {
-            "id":          str(r["id"]),
-            "text":        r["text"],
+            "id": str(r["id"]),
+            "text": r["text"],
             "page_number": r["page_number"],
-            "section":     r["section"],
-            "score":       float(r["score"]),
+            "section": r["section"],
+            "score": float(r["score"]),
         }
         for r in rows
     ]
-    logger.info(
-        "pgvector search returned %d passages for run %s", len(results), run_id
-    )
+    logger.info("pgvector search returned %d passages for run %s", len(results), run_id)
     return results
 
 
@@ -138,11 +136,11 @@ async def _token_overlap_search(
     query_tokens = _tokenize(query)
     scored = [
         {
-            "id":          str(r["id"]),
-            "text":        r["text"],
+            "id": str(r["id"]),
+            "text": r["text"],
             "page_number": r["page_number"],
-            "section":     r["section"],
-            "score":       _token_overlap_score(query_tokens, r["text"]),
+            "section": r["section"],
+            "score": _token_overlap_score(query_tokens, r["text"]),
         }
         for r in rows
     ]
@@ -168,27 +166,35 @@ async def embed_and_store_passages(
     logger.info("Generating embeddings for %d passages…", len(texts))
     vectors = await embedding_service.embed_many(texts)
 
-    # If all vectors failed (e.g. quota exhausted), return immediately
+    # Attach in-memory embeddings so downstream RAG and backend persistence receive them
+    for passage, vec in zip(passages, vectors, strict=False):
+        if vec is not None:
+            passage["embedding"] = vec
+
     valid_vectors = [v for v in vectors if v is not None]
     if not valid_vectors:
-        logger.info("No vectors generated (quota or fallback active), continuing with token-overlap.")
+        logger.info(
+            "No vectors generated (quota or fallback active), "
+            "continuing with token-overlap."
+        )
         return passages
 
-    pool = get_db_pool()
-    updated = 0
+    try:
+        pool = get_db_pool()
+        updated = 0
+        async with pool.acquire() as conn:
+            for passage, vec in zip(passages, vectors, strict=False):
+                if vec is None:
+                    continue
+                vec_literal = "[" + ",".join(str(v) for v in vec) + "]"
+                await conn.execute(
+                    "UPDATE paper_passages SET embedding = $1::vector WHERE id = $2",
+                    vec_literal,
+                    passage["id"],
+                )
+                updated += 1
+        logger.info("Stored embeddings for %d / %d passages", updated, len(passages))
+    except Exception as exc:
+        logger.info("Database update deferred to backend persistence: %s", exc)
 
-    async with pool.acquire() as conn:
-        for passage, vec in zip(passages, vectors):
-            if vec is None:
-                continue
-            vec_literal = "[" + ",".join(str(v) for v in vec) + "]"
-            await conn.execute(
-                "UPDATE paper_passages SET embedding = $1::vector WHERE id = $2",
-                vec_literal,
-                passage["id"],
-            )
-            passage["embedding"] = vec
-            updated += 1
-
-    logger.info("Stored embeddings for %d / %d passages", updated, len(passages))
     return passages

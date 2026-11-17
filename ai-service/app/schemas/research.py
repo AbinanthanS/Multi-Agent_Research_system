@@ -32,6 +32,7 @@ class PassageOutput(BaseModel):
     text: str
     page_number: int | None = None
     section: str = "General"
+    embedding: list[float] | None = None
 
 
 class ClaimOutput(BaseModel):

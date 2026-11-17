@@ -94,6 +94,7 @@ def test_process_paper_into_passages():
 @pytest.mark.asyncio
 async def test_download_pdf_safely_size_guard(monkeypatch):
     """Verify that downloads exceeding max_size_bytes raise BadRequestError."""
+
     # Test Content-Length guard
     class MockResponse:
         status_code = 200

@@ -18,7 +18,6 @@ SDK Note:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 import uuid
@@ -36,9 +35,10 @@ logger = logging.getLogger("ai_service.research_graph")
 # Shared State
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class ResearchGraphState(TypedDict):
     question: str
-    run_id: str                        # NEW: needed for vector search scoping
+    run_id: str  # NEW: needed for vector search scoping
     papers: list[dict[str, Any]]
     passages: list[dict[str, Any]]
     sub_queries: list[str]
@@ -53,6 +53,7 @@ class ResearchGraphState(TypedDict):
 # Gemini LLM helper — uses new google-genai SDK
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _llm_call(prompt: str) -> str | None:
     """
     Synchronous Gemini text generation via the new google-genai SDK.
@@ -63,6 +64,7 @@ def _llm_call(prompt: str) -> str | None:
         return None
     try:
         from google import genai  # type: ignore
+
         client = genai.Client(api_key=settings.GEMINI_API_KEY)
         response = client.models.generate_content(
             model=settings.GEMINI_MODEL,
@@ -78,6 +80,7 @@ def _llm_call(prompt: str) -> str | None:
 # Algorithmic fallbacks (used when Gemini is unavailable)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _tokenize(text: str) -> set[str]:
     return set(re.findall(r"\b[a-zA-Z0-9]{3,}\b", text.lower()))
 
@@ -88,6 +91,41 @@ def _score_passage(query_tokens: set[str], passage_text: str) -> float:
         return 0.0
     overlap = len(query_tokens.intersection(passage_tokens))
     return overlap / (len(query_tokens) + 1.0)
+
+
+def _cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
+    if not vec_a or not vec_b or len(vec_a) != len(vec_b):
+        return 0.0
+    dot = sum(a * b for a, b in zip(vec_a, vec_b, strict=False))
+    norm_a = sum(a * a for a in vec_a) ** 0.5
+    norm_b = sum(b * b for b in vec_b) ** 0.5
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def _embed_query_sync(text: str) -> list[float] | None:
+    settings = get_settings()
+    if not settings.gemini_enabled:
+        return None
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        cfg = types.EmbedContentConfig(
+            output_dimensionality=768,
+            task_type="RETRIEVAL_QUERY",
+        )
+        res = client.models.embed_content(
+            model=settings.GEMINI_EMBEDDING_MODEL,
+            contents=text,
+            config=cfg,
+        )
+        return list(res.embeddings[0].values)
+    except Exception as exc:
+        logger.warning("Gemini query embedding failed: %s", exc)
+        return None
 
 
 def _algorithmic_sub_queries(question: str) -> list[str]:
@@ -104,6 +142,7 @@ def _algorithmic_sub_queries(question: str) -> list[str]:
 # ──────────────────────────────────────────────────────────────────────────────
 # 1. Planner Agent
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def planner_node(state: ResearchGraphState) -> dict[str, Any]:
     """Decompose the research question into 4 specialised investigative angles.
@@ -140,7 +179,9 @@ Sub-queries:"""
         sub_queries = [q for q in lines if len(q) > 10][:4]
 
         if len(sub_queries) >= 2:
-            logger.info("Planner: generated %d sub-queries via Gemini", len(sub_queries))
+            logger.info(
+                "Planner: generated %d sub-queries via Gemini", len(sub_queries)
+            )
             return {"sub_queries": sub_queries}
         else:
             logger.warning("Planner: Gemini response malformed, using fallback")
@@ -155,6 +196,7 @@ Sub-queries:"""
 # 2. Extractor Agent (RAG-powered)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def extractor_node(state: ResearchGraphState) -> dict[str, Any]:
     """Extract evidence-grounded claims using RAG vector retrieval.
 
@@ -165,41 +207,62 @@ def extractor_node(state: ResearchGraphState) -> dict[str, Any]:
     """
     passages = state["passages"]
     sub_queries = state["sub_queries"]
-    logger.info("Extractor Agent: %d passages, %d sub-queries", len(passages), len(sub_queries))
+    logger.info(
+        "Extractor Agent: %d passages, %d sub-queries", len(passages), len(sub_queries)
+    )
 
     claims: list[dict[str, Any]] = []
     claim_types = ["finding", "methodology", "limitation", "implication"]
 
     if not passages:
-        claims.append({
-            "id": str(uuid.uuid4()),
-            "claim_text": f"Preliminary evidence on {state['question']}.",
-            "claim_type": "finding",
-            "confidence": 0.80,
-            "passage_ids": [],
-        })
+        claims.append(
+            {
+                "id": str(uuid.uuid4()),
+                "claim_text": f"Preliminary evidence on {state['question']}.",
+                "claim_type": "finding",
+                "confidence": 0.80,
+                "passage_ids": [],
+            }
+        )
         return {"claims": claims}
 
-    # ── Retrieve top passages for each sub-query (token-overlap RAG) ──
+    # ── Retrieve top passages for each sub-query (vector or token-overlap RAG) ──
     query_contexts: list[tuple[str, list[dict]]] = []
+    has_passage_vectors = any(p.get("embedding") for p in passages)
+
     for query in sub_queries:
-        query_tokens = _tokenize(query)
-        scored = [(p, _score_passage(query_tokens, p["text"])) for p in passages]
-        scored.sort(key=lambda x: x[1], reverse=True)
-        top_passages = [p for p, _ in scored[:3]] or [passages[0]]
+        top_passages: list[dict] = []
+        if has_passage_vectors:
+            query_vec = _embed_query_sync(query)
+            if query_vec:
+                scored_vec = [
+                    (
+                        p,
+                        _cosine_similarity(query_vec, p["embedding"])
+                        if p.get("embedding")
+                        else 0.0,
+                    )
+                    for p in passages
+                ]
+                scored_vec.sort(key=lambda x: x[1], reverse=True)
+                top_passages = [p for p, s in scored_vec[:3] if s > 0.0]
+
+        if not top_passages:
+            query_tokens = _tokenize(query)
+            scored = [(p, _score_passage(query_tokens, p["text"])) for p in passages]
+            scored.sort(key=lambda x: x[1], reverse=True)
+            top_passages = [p for p, _ in scored[:3]] or [passages[0]]
+
         query_contexts.append((query, top_passages))
 
     # ── Single batched Gemini call for all sub-queries ──
     query_blocks = []
     for i, (query, top_passages) in enumerate(query_contexts):
         context_text = "\n---\n".join(
-            f"[P{j+1} | {p.get('section','General')}] {p['text'][:350]}"
+            f"[P{j + 1} | {p.get('section', 'General')}] {p['text'][:350]}"
             for j, p in enumerate(top_passages)
         )
-        query_blocks.append(
-            f"SUB-QUERY {i + 1}: {query}\n"
-            f"PASSAGES:\n{context_text}"
-        )
+        query_blocks.append(f"SUB-QUERY {i + 1}: {query}\nPASSAGES:\n{context_text}")
 
     batch_prompt = (
         "You are an expert research analyst. For each SUB-QUERY below, "
@@ -235,13 +298,15 @@ def extractor_node(state: ResearchGraphState) -> dict[str, Any]:
                 snippet += "..."
             claim_text = f"Regarding {query.split()[0]}: findings show that {snippet}"
 
-        claims.append({
-            "id": str(uuid.uuid4()),
-            "claim_text": claim_text,
-            "claim_type": claim_type,
-            "confidence": 0.85,
-            "passage_ids": [p["id"] for p in top_passages[:2]],
-        })
+        claims.append(
+            {
+                "id": str(uuid.uuid4()),
+                "claim_text": claim_text,
+                "claim_type": claim_type,
+                "confidence": 0.85,
+                "passage_ids": [p["id"] for p in top_passages[:2]],
+            }
+        )
 
     logger.info(
         "Extractor: produced %d claims (%d from Gemini, %d fallback)",
@@ -255,6 +320,7 @@ def extractor_node(state: ResearchGraphState) -> dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────────
 # 3. Critic / Fact-Checker Agent
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def critic_node(state: ResearchGraphState) -> dict[str, Any]:
     """Verify each claim against its linked passages using Gemini.
@@ -315,7 +381,7 @@ def critic_node(state: ResearchGraphState) -> dict[str, Any]:
         "- contextual    → passage is related but neither confirms nor refutes\n\n"
         + "\n\n".join(batch_lines)
         + "\n\nOutput EXACTLY one word per pair, one per line, in the same order "
-          "(supporting / contradicting / contextual):"
+        "(supporting / contradicting / contextual):"
     )
 
     raw_batch = _llm_call(batch_prompt)
@@ -341,15 +407,16 @@ def critic_node(state: ResearchGraphState) -> dict[str, Any]:
         pg = p.get("page_number", 1)
         sec = p.get("section", "General")
         explanation = (
-            f"Passage (Page {pg}, {sec}): "
-            f"{p['text'][:120].replace(chr(10), ' ')}…"
+            f"Passage (Page {pg}, {sec}): {p['text'][:120].replace(chr(10), ' ')}…"
         )
-        evidences.append({
-            "claim_id":     claim["id"],
-            "passage_id":   p["id"],
-            "support_type": support_type,
-            "explanation":  explanation,
-        })
+        evidences.append(
+            {
+                "claim_id": claim["id"],
+                "passage_id": p["id"],
+                "support_type": support_type,
+                "explanation": explanation,
+            }
+        )
 
     logger.info(
         "Critic: classified %d evidence pairs (%d from Gemini, %d fallback)",
@@ -363,6 +430,7 @@ def critic_node(state: ResearchGraphState) -> dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────────
 # 4. Synthesizer Agent
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def synthesizer_node(state: ResearchGraphState) -> dict[str, Any]:
     """Generate a publication-grade Markdown research report using Gemini.
@@ -388,13 +456,13 @@ def synthesizer_node(state: ResearchGraphState) -> dict[str, Any]:
             for e in related_ev
         )
         claims_block += (
-            f"\n### Claim {i} ({c['claim_type']}, confidence {int(c['confidence']*100)}%)\n"
+            f"\n### Claim {i} ({c['claim_type']}, confidence {int(c['confidence'] * 100)}%)\n"
             f"{c['claim_text']}\n"
             f"Evidence:\n{ev_lines or '  (none)'}\n"
         )
 
     papers_block = "\n".join(
-        f"- {p.get('title','Untitled')} ({p.get('published_year','n.d.')}) "
+        f"- {p.get('title', 'Untitled')} ({p.get('published_year', 'n.d.')}) "
         f"— {', '.join((p.get('authors') or [])[:2]) or 'Unknown Authors'}"
         for p in papers[:15]
     )
@@ -430,7 +498,9 @@ Write the full report now:"""
 
     if raw_report and len(raw_report) > 300:
         markdown_report = raw_report
-        logger.info("Synthesizer: Gemini generated report (%d chars)", len(markdown_report))
+        logger.info(
+            "Synthesizer: Gemini generated report (%d chars)", len(markdown_report)
+        )
     else:
         logger.warning("Synthesizer: Gemini response too short/failed, using template")
         markdown_report = _template_report(
@@ -466,25 +536,36 @@ def _template_report(
 ) -> str:
     """Deterministic Markdown template fallback."""
     lines = [
-        f"# {report_title}", "",
+        f"# {report_title}",
+        "",
         "## Executive Summary",
         f"This synthesis reviews scholarly literature to investigate: **{question}**.",
         f"A total of {len(papers)} papers were analysed, extracting "
-        f"{len(state.get('passages', []))} passages and verifying {len(claims)} claims.", "",
+        f"{len(state.get('passages', []))} passages and verifying {len(claims)} claims.",
+        "",
         "## Key Discovered Literature",
     ]
     for p in papers:
         authors = p.get("authors")
-        author_str = ", ".join(authors[:3]) if isinstance(authors, list) and authors else "Unknown"
+        author_str = (
+            ", ".join(authors[:3])
+            if isinstance(authors, list) and authors
+            else "Unknown"
+        )
         year = p.get("published_year") or "n.d."
         url = p.get("url") or p.get("pdf_url") or "#"
-        lines.append(f"- **[{p.get('title','Untitled')}]({url})** ({year}) — *{author_str}*")
-    lines += ["", "## Evidence-Grounded Claims & Verification",
-              "| Claim | Type | Confidence | Status |",
-              "| :--- | :--- | :--- | :--- |"]
+        lines.append(
+            f"- **[{p.get('title', 'Untitled')}]({url})** ({year}) — *{author_str}*"
+        )
+    lines += [
+        "",
+        "## Evidence-Grounded Claims & Verification",
+        "| Claim | Type | Confidence | Status |",
+        "| :--- | :--- | :--- | :--- |",
+    ]
     for c in claims:
         lines.append(
-            f"| {c['claim_text']} | `{c['claim_type']}` | {int(c['confidence']*100)}% | Verified |"
+            f"| {c['claim_text']} | `{c['claim_type']}` | {int(c['confidence'] * 100)}% | Verified |"
         )
     lines += ["", "## Critical Analysis"]
     for idx, c in enumerate(claims, 1):
@@ -497,7 +578,8 @@ def _template_report(
     lines += [
         "## Limitations & Future Directions",
         "- Findings reflect open-access preprints and indexed repositories.",
-        "- Cross-modal benchmarking and longitudinal replication are recommended.", "",
+        "- Cross-modal benchmarking and longitudinal replication are recommended.",
+        "",
         "---",
         "*Report generated by the Multi-Agent Research System (LangGraph + Gemini).*",
     ]
@@ -508,19 +590,20 @@ def _template_report(
 # Compile LangGraph Workflow
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def build_research_graph():
     """Build and compile the LangGraph multi-agent research workflow."""
     workflow = StateGraph(ResearchGraphState)
 
-    workflow.add_node("planner",     planner_node)
-    workflow.add_node("extractor",   extractor_node)
-    workflow.add_node("critic",      critic_node)
+    workflow.add_node("planner", planner_node)
+    workflow.add_node("extractor", extractor_node)
+    workflow.add_node("critic", critic_node)
     workflow.add_node("synthesizer", synthesizer_node)
 
     workflow.set_entry_point("planner")
-    workflow.add_edge("planner",     "extractor")
-    workflow.add_edge("extractor",   "critic")
-    workflow.add_edge("critic",      "synthesizer")
+    workflow.add_edge("planner", "extractor")
+    workflow.add_edge("extractor", "critic")
+    workflow.add_edge("critic", "synthesizer")
     workflow.add_edge("synthesizer", END)
 
     return workflow.compile()
