@@ -1,10 +1,15 @@
+import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { StatusBadge } from "../ui/StatusBadge";
+import { useDeleteRun } from "../../hooks/useResearch";
+import { useToast } from "../../hooks/useToast";
 import { formatDateTime, formatDuration, formatRelative } from "../../lib/format";
 import type { ResearchRun } from "../../types/domain";
 
 export function ResearchRunTable({ runs }: { runs: ResearchRun[] }) {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const deleteRun = useDeleteRun();
   return (
     <div className="overflow-x-auto rounded-xl border border-line">
       <table className="w-full min-w-[720px] text-left text-sm">
@@ -15,6 +20,7 @@ export function ResearchRunTable({ runs }: { runs: ResearchRun[] }) {
             <th className="px-4 py-3 font-medium">Scope</th>
             <th className="px-4 py-3 font-medium">Created</th>
             <th className="px-4 py-3 font-medium">Updated</th>
+            <th className="px-4 py-3 text-right font-medium">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -46,6 +52,25 @@ export function ResearchRunTable({ runs }: { runs: ResearchRun[] }) {
               </td>
               <td className="px-4 py-3 text-xs text-fg-muted">
                 {formatRelative(run.updated_at) ?? "—"}
+              </td>
+              <td className="px-4 py-3 text-right">
+                <button
+                  type="button"
+                  aria-label="Delete run"
+                  className="rounded p-1 text-fg-muted hover:bg-error/10 hover:text-error"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm("Are you sure you want to delete this research run?")) {
+                      deleteRun.mutate(run.id, {
+                        onSuccess: () => toast("Research run deleted.", "success"),
+                        onError: (err) =>
+                          toast(err instanceof Error ? err.message : "Delete failed.", "error"),
+                      });
+                    }
+                  }}
+                >
+                  <Trash2 size={15} />
+                </button>
               </td>
             </tr>
           ))}

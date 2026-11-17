@@ -67,6 +67,7 @@ export interface PaperDiscoveryResult {
   providers: {
     arxiv?: ProviderDiscoveryResult;
     semanticScholar?: ProviderDiscoveryResult;
+    openAlex?: ProviderDiscoveryResult;
   };
   warnings: DiscoveryWarning[];
   papers?: ResearchPaper[];

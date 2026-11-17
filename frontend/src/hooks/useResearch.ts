@@ -69,6 +69,16 @@ export function useCreateRun() {
   });
 }
 
+export function useDeleteRun() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteRun(id),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["research-runs"] });
+    },
+  });
+}
+
 export function useDiscoverPapers(id: string) {
   const client = useQueryClient();
   return useMutation({

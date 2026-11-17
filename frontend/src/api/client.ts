@@ -157,6 +157,20 @@ export const api = {
     return data;
   },
 
+  async deleteRun(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<{ id: string; deleted: boolean }> {
+    const payload = await request<unknown>(`/research-runs/${id}`, {
+      method: "DELETE",
+      signal,
+    });
+    return unwrapData<{ id: string; deleted: boolean }>(
+      payload,
+      "delete research run",
+    );
+  },
+
   async discoverPapers(
     id: string,
     maxPapers?: number,
