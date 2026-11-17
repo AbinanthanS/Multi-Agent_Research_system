@@ -25,6 +25,11 @@ export async function fetchProviderResponse(
   }
 
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error(
+        `${provider} rate-limited (HTTP 429). An API key in SEMANTIC_SCHOLAR_API_KEY is required for dedicated rate limits.`,
+      );
+    }
     throw new Error(`${provider} returned HTTP ${response.status}`);
   }
 

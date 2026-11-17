@@ -61,7 +61,10 @@ export async function persistPassages(passages, db = pool) {
         id, paper_id, passage_index, text, page_number, section, embedding
       )
       VALUES ${valuePlaceholders.join(", ")}
-      ON CONFLICT (id) DO UPDATE SET
+      ON CONFLICT (paper_id, passage_index) DO UPDATE SET
+        text = EXCLUDED.text,
+        page_number = EXCLUDED.page_number,
+        section = EXCLUDED.section,
         embedding = COALESCE(EXCLUDED.embedding, paper_passages.embedding)
       RETURNING id, paper_id, passage_index, page_number, section
     `;
